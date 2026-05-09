@@ -75,6 +75,7 @@
 .ls-nav-links { display: flex; gap: 28px; color: var(--ink-2); font-weight: 500; font-size: 14px; }
 .ls-nav-links a { color: inherit; text-decoration: none; opacity: .78; transition: opacity .15s; }
 .ls-nav-links a:hover { opacity: 1; }
+.ls-nav-cta { display: flex; align-items: center; gap: 8px; }
 .ls-nav-cta a { text-decoration: none; color: var(--ink); font-weight: 600; font-size: 14px; }
 
 /* ── Buttons ── */
@@ -99,6 +100,8 @@
 .ls-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 12px 28px var(--accent-glow); }
 .ls-btn.dark { background: var(--ink); color: #fff; }
 .ls-btn.dark:hover { background: #000; transform: translateY(-1px); }
+.ls-btn.secondary { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); }
+.ls-btn.secondary:hover { background: var(--rule); transform: translateY(-1px); }
 .ls-btn.nav { font-size: 14px; padding: 11px 20px; }
 
 /* ── Eyebrow / Disclaimer ── */

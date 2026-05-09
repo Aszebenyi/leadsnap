@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
 import './Landing.css';
 
+// Update this once the extension is published to the Chrome Web Store
+const CWS_URL = 'https://chrome.google.com/webstore/detail/leadsnap';
+
 const BoltIcon = ({ size = 15 }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: size, height: size }}>
     <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
@@ -23,7 +26,8 @@ export default function Landing() {
           <a href="#faq">FAQ</a>
         </div>
         <div className="ls-nav-cta">
-          <Link to="/signup" className="ls-btn primary nav">Start Getting Jobs →</Link>
+          <Link to="/login" className="ls-btn secondary nav">Sign in</Link>
+          <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary nav">Add to Chrome</a>
         </div>
       </nav>
 
@@ -43,7 +47,9 @@ export default function Landing() {
         </p>
 
         <div className="ls-cta-row">
-          <Link to="/signup" className="ls-btn primary">Start Getting Jobs →</Link>
+          <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary">
+            Add to Chrome — It's Free
+          </a>
         </div>
 
         <div className="ls-disclaimer">
@@ -300,7 +306,7 @@ export default function Landing() {
                 </div>
                 <div className="ls-reply-label">Reply ready to send</div>
                 <div className="ls-reply-box">"Hey Tom! We can fit you in this week — DM me your address and I'll confirm the time! 🌿"</div>
-                <Link to="/signup" className="ls-btn primary" style={{ width: '100%', justifyContent: 'center' }}>Tap to reply first on Facebook →</Link>
+                <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary" style={{ width: '100%', justifyContent: 'center' }}>Add to Chrome — Be First to Reply →</a>
                 <div className="ls-sms-sent">⚡ SENT TO YOUR PHONE IN UNDER 2 MINUTES</div>
               </div>
             </div>
@@ -549,7 +555,7 @@ export default function Landing() {
                   <li key={f}><span className="ck">✓</span> {f}</li>
                 ))}
               </ul>
-              <Link to="/signup" className="ls-btn dark">Start Getting Jobs →</Link>
+              <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn dark">Add to Chrome →</a>
             </div>
 
             <div className="ls-plan pro">
@@ -561,7 +567,7 @@ export default function Landing() {
                   <li key={f}><span className="ck">✓</span> {f}</li>
                 ))}
               </ul>
-              <Link to="/signup" className="ls-btn primary">Get Pro →</Link>
+              <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary">Get Pro →</a>
             </div>
           </div>
         </div>
@@ -597,7 +603,7 @@ export default function Landing() {
         <h2>Stop searching. <em>Start replying first.</em></h2>
         <p className="lede">Jobs are being posted right now. Don't miss them.</p>
         <div className="ls-cta-row">
-          <Link to="/signup" className="ls-btn primary" style={{ fontSize: 16, padding: '16px 30px' }}>Start Getting Jobs →</Link>
+          <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary" style={{ fontSize: 16, padding: '16px 30px' }}>Add to Chrome — It's Free →</a>
         </div>
         <div className="ls-disclaimer">
           <span><span className="ls-ck">✓</span> Free 7-day trial</span>
@@ -616,7 +622,7 @@ export default function Landing() {
             LeadSnap
           </a>
           <div className="links">
-            <a href="#">Privacy</a>
+            <Link to="/privacy">Privacy Policy</Link>
             <a href="#">Terms</a>
             <a href="#">Support</a>
           </div>

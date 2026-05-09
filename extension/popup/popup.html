@@ -2,112 +2,173 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LeadSnap</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <div id="app">
+<div id="app">
 
-    <!-- Loading -->
-    <div id="view-loading" class="view">
+  <!-- ── Loading ── -->
+  <div id="view-loading" class="view">
+    <div class="splash-loading">
       <div class="spinner"></div>
     </div>
-
-    <!-- Logged out -->
-    <div id="view-logged-out" class="view hidden">
-      <div class="splash">
-        <div class="logo">LeadSnap</div>
-        <p class="tagline">Capture local service leads from Facebook groups</p>
-        <button id="btn-sign-in" class="btn btn-primary btn-full">Sign In / Create Account</button>
-      </div>
-    </div>
-
-    <!-- Logged in -->
-    <div id="view-logged-in" class="view hidden">
-
-      <!-- Header -->
-      <div class="header">
-        <span class="logo-sm">LeadSnap</span>
-        <div class="header-right">
-          <span id="status-dot" class="dot dot-inactive" title="Scanning status"></span>
-          <button id="btn-logout" class="btn-link">Sign out</button>
-        </div>
-      </div>
-
-      <!-- Tab bar -->
-      <div class="tabs">
-        <button class="tab active" data-tab="status">Status</button>
-        <button class="tab" data-tab="keywords">Keywords</button>
-        <button class="tab" data-tab="groups">Groups</button>
-      </div>
-
-      <!-- ── Status tab ── -->
-      <div id="tab-status" class="tab-panel">
-        <div class="stat-grid">
-          <div class="stat">
-            <div class="stat-value" id="stat-keywords">—</div>
-            <div class="stat-label">Keywords</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value" id="stat-groups">—</div>
-            <div class="stat-label">Groups</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value" id="stat-last-scan">—</div>
-            <div class="stat-label">Last scan</div>
-          </div>
-        </div>
-
-        <div class="toggle-row">
-          <span class="toggle-label">Scanning enabled</span>
-          <label class="toggle">
-            <input type="checkbox" id="toggle-scanning" />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div id="sub-banner" class="banner banner-warn hidden">
-          ⚠️ Subscription expired —
-          <a id="btn-upgrade" href="#" class="banner-link">Upgrade</a>
-        </div>
-
-        <div class="action-row">
-          <button id="btn-scan-now" class="btn btn-secondary btn-full" style="margin-bottom:8px">Scan Now</button>
-        </div>
-        <div class="action-row">
-          <button id="btn-view-leads" class="btn btn-primary btn-full">View Leads Dashboard</button>
-        </div>
-      </div>
-
-      <!-- ── Keywords tab ── -->
-      <div id="tab-keywords" class="tab-panel hidden">
-        <div class="add-form">
-          <input type="text" id="keyword-input" placeholder="e.g. lawn mowing" maxlength="60" />
-          <button id="btn-add-keyword" class="btn btn-primary btn-sm">Add</button>
-        </div>
-        <div id="keyword-error" class="inline-error hidden"></div>
-        <ul id="keyword-list" class="item-list">
-          <li class="empty-msg">Loading…</li>
-        </ul>
-      </div>
-
-      <!-- ── Groups tab ── -->
-      <div id="tab-groups" class="tab-panel hidden">
-        <div class="groups-toolbar">
-          <span id="groups-counter" class="groups-counter">0/25 selected</span>
-          <button id="btn-scan-groups" class="btn btn-sm btn-secondary">Scan Facebook</button>
-        </div>
-        <div id="groups-msg" class="groups-msg"></div>
-        <div id="groups-list" class="checkbox-list"></div>
-        <div id="groups-save-row" class="save-row hidden">
-          <button id="btn-save-groups" class="btn btn-primary btn-full">Save selections</button>
-        </div>
-      </div>
-
-    </div><!-- /view-logged-in -->
   </div>
 
-  <script type="module" src="popup.js"></script>
+  <!-- ── Logged out ── -->
+  <div id="view-logged-out" class="view hidden">
+    <div class="splash">
+      <div class="splash-logo">
+        <div class="bolt-mark">
+          <svg viewBox="0 0 24 24" fill="white" width="22" height="22"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
+        </div>
+        <span>LeadSnap</span>
+      </div>
+      <p class="splash-tagline">Be the first to reply on every local job.</p>
+      <button id="btn-sign-in" class="btn btn-primary btn-full">Sign In / Get Started</button>
+      <p class="splash-sub">Free 7-day trial · No credit card required</p>
+    </div>
+  </div>
+
+  <!-- ── Logged in ── -->
+  <div id="view-logged-in" class="view hidden">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-logo">
+        <div class="bolt-mark sm">
+          <svg viewBox="0 0 24 24" fill="white" width="13" height="13"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
+        </div>
+        <span class="header-brand">LeadSnap</span>
+      </div>
+      <div class="header-right">
+        <span id="user-email" class="user-email"></span>
+        <button id="btn-logout" class="btn-ghost">Sign out</button>
+      </div>
+    </header>
+
+    <!-- Subscription banner -->
+    <div id="sub-banner" class="banner banner-warn hidden">
+      ⚠️ Subscription expired —
+      <button id="btn-upgrade" class="banner-btn">Upgrade →</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="status">Status</button>
+      <button class="tab" data-tab="leads">Leads</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </div>
+
+    <!-- ══ Status tab ══ -->
+    <div id="tab-status" class="tab-panel">
+
+      <!-- Monitoring status card -->
+      <div class="status-card" id="status-card">
+        <div class="status-card-left">
+          <span class="status-dot" id="status-dot"></span>
+          <div>
+            <div class="status-title" id="status-title">Loading…</div>
+            <div class="status-sub" id="status-sub"></div>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-scanning" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-value" id="stat-keywords">—</div>
+          <div class="stat-label">Keywords</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <div class="stat-value" id="stat-groups">—</div>
+          <div class="stat-label">Groups</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <div class="stat-value" id="stat-last-scan">—</div>
+          <div class="stat-label">Last scan</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <button id="btn-scan-now" class="btn btn-primary btn-full" style="margin-bottom:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Scan Now
+      </button>
+      <button id="btn-view-leads" class="btn btn-ghost-border btn-full">
+        Open Dashboard →
+      </button>
+    </div>
+
+    <!-- ══ Leads tab ══ -->
+    <div id="tab-leads" class="tab-panel hidden">
+      <div id="leads-list">
+        <div class="leads-loading">
+          <div class="spinner sm"></div>
+        </div>
+      </div>
+      <button id="btn-all-leads" class="btn btn-ghost-border btn-full" style="margin-top:8px">
+        View all leads →
+      </button>
+    </div>
+
+    <!-- ══ Settings tab ══ -->
+    <div id="tab-settings" class="tab-panel hidden">
+
+      <div class="settings-list">
+
+        <div class="setting-row">
+          <div class="setting-icon">🔑</div>
+          <div class="setting-body">
+            <div class="setting-label">Keywords</div>
+            <div class="setting-val" id="setting-keywords-val">— keywords</div>
+          </div>
+          <button class="setting-action" id="btn-manage-kw">Manage →</button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">📡</div>
+          <div class="setting-body">
+            <div class="setting-label">Groups</div>
+            <div class="setting-val" id="setting-groups-val">— selected</div>
+          </div>
+          <button class="setting-action" id="btn-manage-groups">Manage →</button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">📱</div>
+          <div class="setting-body">
+            <div class="setting-label">SMS alerts</div>
+            <div class="setting-val" id="setting-phone-val">No phone number</div>
+          </div>
+          <button class="setting-action" id="btn-edit-phone">Edit →</button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">🌐</div>
+          <div class="setting-body">
+            <div class="setting-label">Website in replies</div>
+            <div class="setting-val" id="setting-website-val">Off</div>
+          </div>
+          <button class="setting-action" id="btn-edit-website">Edit →</button>
+        </div>
+
+      </div>
+
+      <button id="btn-open-dashboard" class="btn btn-primary btn-full" style="margin-top:12px">
+        Open Full Dashboard
+      </button>
+    </div>
+
+  </div><!-- /view-logged-in -->
+</div><!-- /app -->
+
+<script type="module" src="popup.js"></script>
 </body>
 </html>

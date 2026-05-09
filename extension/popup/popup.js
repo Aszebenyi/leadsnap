@@ -1,9 +1,5 @@
-// LeadSnap popup — ES module (popup.html loads this with type="module")
-import {
-  getKeywords as apiGetKeywords,
-  addKeyword  as apiAddKeyword,
-  deleteKeyword as apiDeleteKeyword,
-} from '../utils/api.js';
+// LeadSnap popup — ES module
+import { getLeads } from '../utils/api.js';
 import {
   getAuthToken,
   clearSession,
@@ -11,12 +7,10 @@ import {
   getSubscriptionStatus,
   getLastScanAt,
   getSelectedGroups,
-  setSelectedGroups,
   isOnboardingComplete,
 } from '../utils/storage.js';
 
 const DASHBOARD_URL = 'https://leadsnap-weld.vercel.app';
-const MAX_GROUPS    = 25;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -24,39 +18,33 @@ const viewLoading   = document.getElementById('view-loading');
 const viewLoggedOut = document.getElementById('view-logged-out');
 const viewLoggedIn  = document.getElementById('view-logged-in');
 
+const userEmailEl    = document.getElementById('user-email');
+const subBanner      = document.getElementById('sub-banner');
 const statusDot      = document.getElementById('status-dot');
+const statusTitle    = document.getElementById('status-title');
+const statusSub      = document.getElementById('status-sub');
+const toggleScanning = document.getElementById('toggle-scanning');
 const statKeywords   = document.getElementById('stat-keywords');
 const statGroups     = document.getElementById('stat-groups');
 const statLastScan   = document.getElementById('stat-last-scan');
-const toggleScanning = document.getElementById('toggle-scanning');
-const subBanner      = document.getElementById('sub-banner');
-
-const keywordInput = document.getElementById('keyword-input');
-const keywordList  = document.getElementById('keyword-list');
-const keywordError = document.getElementById('keyword-error');
-
-const groupsCounter = document.getElementById('groups-counter');
-const groupsMsg     = document.getElementById('groups-msg');
-const groupsList    = document.getElementById('groups-list');
-const groupsSaveRow = document.getElementById('groups-save-row');
+const leadsList      = document.getElementById('leads-list');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let token    = null;
-let keywords = [];
-
-// Groups state — lives only in popup memory; persisted on Save
-let allDiscoveredGroups = []; // [{ url, name }] — full discovered + saved list
-let selectedGroupUrls   = new Set(); // urls of currently checked groups
+let token          = null;
+let keywordsCount  = 0;
+let groupsCount    = 0;
+let leadsLoaded    = false; // load once on first tab switch
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function init() {
   showView('loading');
   token = await getAuthToken();
+
   if (!token) { showView('logged-out'); return; }
 
-  // If onboarding hasn't been completed yet, redirect there
+  // Redirect to onboarding if not yet complete
   const onboarded = await isOnboardingComplete();
   if (!onboarded) {
     chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
@@ -64,8 +52,15 @@ async function init() {
     return;
   }
 
+  // Show email from storage
+  chrome.storage.sync.get('user_email', (d) => {
+    if (d.user_email) userEmailEl.textContent = d.user_email;
+  });
+
   showView('logged-in');
-  await Promise.all([loadStatus(), loadKeywords(), initGroupsTab()]);
+
+  // Load status tab data (default tab)
+  await loadStatus();
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -84,251 +79,165 @@ document.querySelectorAll('.tab').forEach((btn) => {
     document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
     btn.classList.add('active');
     document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+
+    // Lazy-load leads on first open
+    if (btn.dataset.tab === 'leads' && !leadsLoaded) {
+      leadsLoaded = true;
+      loadLeads();
+    }
+    // Populate settings values on switch
+    if (btn.dataset.tab === 'settings') {
+      loadSettings();
+    }
   });
 });
 
 // ── Status tab ────────────────────────────────────────────────────────────────
 
 async function loadStatus() {
-  const [scanningEnabled, lastScanAt, { status: subStatus }, savedGroups] = await Promise.all([
-    new Promise((r) => chrome.storage.sync.get('scanning_enabled', (d) => r(d.scanning_enabled !== false))),
-    getLastScanAt(),
-    getSubscriptionStatus(),
-    getSelectedGroups(),
-  ]);
+  const [scanningEnabled, lastScanAt, { status: subStatus }, savedGroups, cachedKeywords] =
+    await Promise.all([
+      new Promise((r) => chrome.storage.sync.get('scanning_enabled', (d) => r(d.scanning_enabled !== false))),
+      getLastScanAt(),
+      getSubscriptionStatus(),
+      getSelectedGroups(),
+      new Promise((r) => chrome.storage.sync.get('keywords', (d) => r(d.keywords || []))),
+    ]);
 
-  toggleScanning.checked   = scanningEnabled;
-  statKeywords.textContent = keywords.length || '—';
-  statGroups.textContent   = savedGroups.length || '—';
-  statLastScan.textContent = formatLastScan(lastScanAt);
+  keywordsCount = cachedKeywords.length;
+  groupsCount   = savedGroups.length;
+
+  toggleScanning.checked     = scanningEnabled;
+  statKeywords.textContent   = keywordsCount || '0';
+  statGroups.textContent     = groupsCount   || '0';
+  statLastScan.textContent   = formatLastScan(lastScanAt);
 
   if (subStatus === 'inactive') {
-    statusDot.className = 'dot dot-error';
+    setStatusCard('error', 'Subscription expired', 'Scanning paused');
     subBanner.classList.remove('hidden');
+  } else if (!scanningEnabled) {
+    setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
   } else {
-    statusDot.className = `dot ${scanningEnabled ? 'dot-active' : 'dot-inactive'}`;
+    setStatusCard('active', 'Monitoring active', 'Scanning every 10 minutes');
   }
+}
+
+function setStatusCard(state, title, sub) {
+  statusDot.className  = `status-dot ${state}`;
+  statusTitle.textContent = title;
+  statusSub.textContent   = sub;
 }
 
 function formatLastScan(ts) {
   if (!ts) return 'Never';
-  const mins = Math.floor((Date.now() - ts) / 60000);
+  const mins = Math.floor((Date.now() - ts) / 60_000);
   if (mins < 1)  return 'Just now';
   if (mins < 60) return `${mins}m ago`;
-  return `${Math.floor(mins / 60)}h ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Keywords tab ──────────────────────────────────────────────────────────────
+// ── Leads tab ─────────────────────────────────────────────────────────────────
 
-function syncKeywordsToStorage() {
-  return chrome.storage.sync.set({ keywords: keywords.map((k) => k.keyword) });
-}
+async function loadLeads() {
+  leadsList.innerHTML = '<div class="leads-loading"><div class="spinner sm"></div></div>';
 
-async function loadKeywords() {
   try {
-    keywords = await apiGetKeywords(token);
-    await syncKeywordsToStorage();
-  } catch {
-    const cached = await new Promise((r) => chrome.storage.sync.get('keywords', (d) => r(d.keywords || [])));
-    keywords = cached.map((k) => ({ keyword: k }));
-  }
-  renderKeywords();
-  statKeywords.textContent = keywords.length;
-}
+    const data = await getLeads(token, { limit: 5 });
+    const leads = data?.leads ?? [];
 
-function renderKeywords() {
-  if (!keywords.length) {
-    keywordList.innerHTML = '<li class="empty-msg">No keywords yet. Add one above.</li>';
-    return;
-  }
-  keywordList.innerHTML = keywords.map((k) => `
-    <li>
-      <span class="item-text">${escHtml(k.keyword)}</span>
-      ${k.id ? `<button class="btn-remove" data-id="${k.id}" title="Remove">×</button>` : ''}
-    </li>
-  `).join('');
-  keywordList.querySelectorAll('.btn-remove').forEach((btn) =>
-    btn.addEventListener('click', () => removeKeyword(btn.dataset.id))
-  );
-}
+    if (!leads.length) {
+      leadsList.innerHTML = `
+        <div class="leads-empty">
+          <div class="leads-empty-icon">📭</div>
+          No leads detected yet.<br>
+          Make sure scanning is on and you have Facebook open.
+        </div>`;
+      return;
+    }
 
-async function addKeyword() {
-  const kw = keywordInput.value.trim().toLowerCase();
-  if (!kw) return;
+    leadsList.innerHTML = leads.map(renderLeadCard).join('');
 
-  setInlineError(keywordError, null);
-  const btn = document.getElementById('btn-add-keyword');
-  btn.disabled = true;
-  try {
-    const created = await apiAddKeyword(token, kw);
-    keywords.push(created);
-    keywordInput.value = '';
-    renderKeywords();
-    statKeywords.textContent = keywords.length;
-    await syncKeywordsToStorage();
   } catch (err) {
-    setInlineError(keywordError, err.message);
-  } finally {
-    btn.disabled = false;
+    leadsList.innerHTML = `
+      <div class="leads-empty">
+        <div class="leads-empty-icon">⚠️</div>
+        Could not load leads.<br>
+        <span style="font-size:11px;color:#9ca3af">${escHtml(err.message)}</span>
+      </div>`;
   }
 }
 
-async function removeKeyword(id) {
-  try {
-    await apiDeleteKeyword(token, id);
-    keywords = keywords.filter((k) => k.id !== id);
-    renderKeywords();
-    statKeywords.textContent = keywords.length;
-    await syncKeywordsToStorage();
-  } catch (err) {
-    setInlineError(keywordError, err.message);
-  }
-}
+function renderLeadCard(lead) {
+  const score    = lead.score ?? null;
+  const badgeClass = score === null ? '' : score >= 8 ? 'high' : score >= 5 ? 'medium' : 'low';
+  const badgeLabel = score !== null ? score : '—';
+  const preview  = (lead.post_text ?? '').trim();
+  const kws      = (lead.matched_keywords ?? []).slice(0, 3);
+  const timeAgo  = relativeTime(lead.detected_at ?? lead.created_at);
+  const groupName = lead.group_name || 'Facebook Group';
+  const fbUrl    = lead.post_url || null;
 
-// ── Groups tab ────────────────────────────────────────────────────────────────
-
-async function initGroupsTab() {
-  // Seed the list with whatever was previously saved
-  const saved = await getSelectedGroups();
-  allDiscoveredGroups = [...saved];
-  selectedGroupUrls   = new Set(saved.map((g) => g.url));
-  statGroups.textContent = saved.length || '—';
-  renderGroupsList();
-
-  // Auto-scan silently — enrich the list if a Facebook tab is open
-  await scanForGroups({ silent: true });
-}
-
-async function scanForGroups({ silent = false } = {}) {
-  const btn = document.getElementById('btn-scan-groups');
-  btn.disabled = true;
-  btn.textContent = 'Scanning…';
-  if (!silent) setGroupsMsg('');
-
-  try {
-    const tabs = await chrome.tabs.query({ url: 'https://www.facebook.com/*' });
-
-    if (!tabs.length) {
-      setGroupsMsg(
-        silent
-          ? 'Open Facebook in Chrome to auto-discover your groups.'
-          : 'No Facebook tab found. Open facebook.com/groups/feed and try again.'
-      );
-      return;
-    }
-
-    // Prefer a groups page; any FB tab will work because the sidebar is universal
-    const tab = tabs.find((t) => t.url.includes('/groups')) || tabs[0];
-
-    let response;
-    try {
-      response = await chrome.tabs.sendMessage(tab.id, { type: 'LEADSNAP_GET_GROUPS' });
-    } catch {
-      setGroupsMsg('Could not reach the Facebook tab. Reload the page and try again.');
-      return;
-    }
-
-    const fetched = response?.groups ?? [];
-    if (!fetched.length) {
-      if (!silent) setGroupsMsg('No groups found on that page. Try opening facebook.com/groups/feed.');
-      return;
-    }
-
-    // Merge — preserve existing entries, append newly discovered ones
-    const knownUrls = new Set(allDiscoveredGroups.map((g) => g.url));
-    let added = 0;
-    for (const g of fetched) {
-      if (!knownUrls.has(g.url)) {
-        allDiscoveredGroups.push(g);
-        knownUrls.add(g.url);
-        added++;
-      }
-    }
-
-    setGroupsMsg(
-      `${allDiscoveredGroups.length} group${allDiscoveredGroups.length !== 1 ? 's' : ''} found` +
-      (added ? ` · ${added} new` : '')
-    );
-    renderGroupsList();
-  } finally {
-    btn.textContent = 'Scan Facebook';
-    btn.disabled = false;
-  }
-}
-
-function renderGroupsList() {
-  // Update counter
-  groupsCounter.textContent = `${selectedGroupUrls.size}/${MAX_GROUPS} selected`;
-
-  // Show/hide Save button
-  groupsSaveRow.classList.toggle('hidden', allDiscoveredGroups.length === 0);
-
-  if (!allDiscoveredGroups.length) {
-    groupsList.innerHTML = '<div class="group-item"><div class="group-item-text"><div class="group-item-name" style="color:#9ca3af">No groups discovered yet — click Scan Facebook above.</div></div></div>';
-    return;
-  }
-
-  const atMax = selectedGroupUrls.size >= MAX_GROUPS;
-
-  groupsList.innerHTML = allDiscoveredGroups.map((g, i) => {
-    const checked  = selectedGroupUrls.has(g.url);
-    const dimmed   = !checked && atMax;
-    return `
-      <label class="group-item${dimmed ? ' dimmed' : ''}">
-        <input type="checkbox" class="group-checkbox" data-idx="${i}"
-          ${checked ? 'checked' : ''} ${dimmed ? 'disabled' : ''} />
-        <div class="group-item-text">
-          <div class="group-item-name">${escHtml(g.name)}</div>
-          <div class="group-item-url">${escHtml(shortUrl(g.url))}</div>
-          ${g.lastVisited ? `<div class="group-item-visited">${escHtml(g.lastVisited)}</div>` : ''}
+  return `
+    <div class="lead-card">
+      <div class="lead-card-top">
+        <span class="lead-group">${escHtml(groupName)}</span>
+        <span class="lead-time">${timeAgo}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <div class="score-badge ${badgeClass}">${badgeLabel}</div>
+        <p class="lead-preview" style="flex:1;min-width:0">${escHtml(preview)}</p>
+      </div>
+      <div class="lead-card-bottom">
+        <div class="lead-kws">
+          ${kws.map((k) => `<span class="lead-kw">${escHtml(k)}</span>`).join('')}
         </div>
-      </label>
-    `;
-  }).join('');
-
-  groupsList.querySelectorAll('.group-checkbox').forEach((cb) => {
-    cb.addEventListener('change', () => {
-      const g = allDiscoveredGroups[parseInt(cb.dataset.idx, 10)];
-      if (cb.checked) {
-        if (selectedGroupUrls.size >= MAX_GROUPS) { cb.checked = false; return; }
-        selectedGroupUrls.add(g.url);
-      } else {
-        selectedGroupUrls.delete(g.url);
-      }
-      renderGroupsList(); // re-render to update counter + disabled states
-    });
-  });
+        ${fbUrl
+          ? `<a class="lead-fb-link" href="${escHtml(fbUrl)}" target="_blank" rel="noreferrer">View on Facebook ↗</a>`
+          : ''}
+      </div>
+    </div>`;
 }
 
-async function saveGroups() {
-  const btn = document.getElementById('btn-save-groups');
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-  try {
-    const toSave = allDiscoveredGroups.filter((g) => selectedGroupUrls.has(g.url));
-    await setSelectedGroups(toSave);
-    statGroups.textContent = toSave.length || '—';
-    setGroupsMsg('Saved!');
-    setTimeout(() => setGroupsMsg(''), 2000);
-  } catch (err) {
-    setGroupsMsg('Save failed: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Save selections';
-  }
+function relativeTime(iso) {
+  if (!iso) return '';
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1)  return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function setGroupsMsg(msg, isError = false) {
-  groupsMsg.textContent = msg;
-  groupsMsg.classList.toggle('error', isError);
+// ── Settings tab ──────────────────────────────────────────────────────────────
+
+async function loadSettings() {
+  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite] =
+    await Promise.all([
+      new Promise((r) => chrome.storage.sync.get('selected_groups', (d) => r(d.selected_groups || []))),
+      new Promise((r) => chrome.storage.sync.get('keywords',        (d) => r(d.keywords        || []))),
+      new Promise((r) => chrome.storage.sync.get('phone_number',    (d) => r(d.phone_number    || ''))),
+      new Promise((r) => chrome.storage.sync.get('website_url',     (d) => r(d.website_url     || ''))),
+      new Promise((r) => chrome.storage.sync.get('include_website_in_replies', (d) => r(!!d.include_website_in_replies))),
+    ]);
+
+  document.getElementById('setting-keywords-val').textContent =
+    cachedKeywords.length ? `${cachedKeywords.length} keyword${cachedKeywords.length !== 1 ? 's' : ''}` : 'None added';
+
+  document.getElementById('setting-groups-val').textContent =
+    savedGroups.length ? `${savedGroups.length} group${savedGroups.length !== 1 ? 's' : ''} selected` : 'None selected';
+
+  document.getElementById('setting-phone-val').textContent =
+    phoneNumber || 'No phone number';
+
+  document.getElementById('setting-website-val').textContent =
+    includeWebsite && websiteUrl
+      ? `On · ${websiteUrl.replace(/^https?:\/\//, '')}`
+      : includeWebsite ? 'On · no URL set' : 'Off';
 }
 
-// ── Shared UI helpers ─────────────────────────────────────────────────────────
-
-function setInlineError(el, msg) {
-  if (msg) { el.textContent = msg; el.classList.remove('hidden'); }
-  else      { el.classList.add('hidden'); }
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function escHtml(str) {
   return String(str)
@@ -336,43 +245,60 @@ function escHtml(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function shortUrl(url) {
-  try { return new URL(url).pathname.replace(/\/$/, ''); }
-  catch { return url; }
-}
-
 // ── Event listeners ───────────────────────────────────────────────────────────
 
 document.getElementById('btn-sign-in').addEventListener('click', () =>
   chrome.tabs.create({ url: chrome.runtime.getURL('auth/auth.html') })
 );
-document.getElementById('btn-view-leads').addEventListener('click', () =>
-  chrome.tabs.create({ url: DASHBOARD_URL })
-);
+
 document.getElementById('btn-logout').addEventListener('click', async () => {
   await clearSession();
   showView('logged-out');
 });
-document.getElementById('btn-upgrade').addEventListener('click', (e) => {
-  e.preventDefault();
-  chrome.tabs.create({ url: `${DASHBOARD_URL}/billing` });
-});
 
-document.getElementById('btn-add-keyword').addEventListener('click', addKeyword);
-keywordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addKeyword(); });
+document.getElementById('btn-upgrade').addEventListener('click', () =>
+  chrome.tabs.create({ url: `${DASHBOARD_URL}/billing` })
+);
 
-document.getElementById('btn-scan-groups').addEventListener('click', () => scanForGroups());
 document.getElementById('btn-scan-now').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' });
   window.close(); // monitor window takes over
 });
-document.getElementById('btn-save-groups').addEventListener('click', saveGroups);
+
+document.getElementById('btn-view-leads').addEventListener('click', () =>
+  chrome.tabs.create({ url: DASHBOARD_URL })
+);
+
+document.getElementById('btn-all-leads').addEventListener('click', () =>
+  chrome.tabs.create({ url: DASHBOARD_URL })
+);
+
+document.getElementById('btn-open-dashboard').addEventListener('click', () =>
+  chrome.tabs.create({ url: DASHBOARD_URL })
+);
+
+// Settings → open dashboard to the right section
+document.getElementById('btn-manage-kw').addEventListener('click', () =>
+  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#keywords` })
+);
+document.getElementById('btn-manage-groups').addEventListener('click', () =>
+  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#groups` })
+);
+document.getElementById('btn-edit-phone').addEventListener('click', () =>
+  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#phone` })
+);
+document.getElementById('btn-edit-website').addEventListener('click', () =>
+  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#website` })
+);
 
 toggleScanning.addEventListener('change', (e) => {
   setScanningEnabled(e.target.checked);
-  statusDot.className = `dot ${e.target.checked ? 'dot-active' : 'dot-inactive'}`;
+  if (e.target.checked) {
+    setStatusCard('active', 'Monitoring active', 'Scanning every 10 minutes');
+  } else {
+    setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
+  }
 });
 
 // ── Go ────────────────────────────────────────────────────────────────────────
-
 init();
