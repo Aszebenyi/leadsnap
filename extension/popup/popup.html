@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeadSnap</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Loading -->
+    <div id="view-loading" class="view">
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Logged out -->
+    <div id="view-logged-out" class="view hidden">
+      <div class="splash">
+        <div class="logo">LeadSnap</div>
+        <p class="tagline">Capture local service leads from Facebook groups</p>
+        <button id="btn-sign-in" class="btn btn-primary btn-full">Sign In / Create Account</button>
+      </div>
+    </div>
+
+    <!-- Logged in -->
+    <div id="view-logged-in" class="view hidden">
+
+      <!-- Header -->
+      <div class="header">
+        <span class="logo-sm">LeadSnap</span>
+        <div class="header-right">
+          <span id="status-dot" class="dot dot-inactive" title="Scanning status"></span>
+          <button id="btn-logout" class="btn-link">Sign out</button>
+        </div>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="tabs">
+        <button class="tab active" data-tab="status">Status</button>
+        <button class="tab" data-tab="keywords">Keywords</button>
+        <button class="tab" data-tab="groups">Groups</button>
+      </div>
+
+      <!-- ── Status tab ── -->
+      <div id="tab-status" class="tab-panel">
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-value" id="stat-keywords">—</div>
+            <div class="stat-label">Keywords</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="stat-groups">—</div>
+            <div class="stat-label">Groups</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="stat-last-scan">—</div>
+            <div class="stat-label">Last scan</div>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Scanning enabled</span>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-scanning" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="sub-banner" class="banner banner-warn hidden">
+          ⚠️ Subscription expired —
+          <a id="btn-upgrade" href="#" class="banner-link">Upgrade</a>
+        </div>
+
+        <div class="action-row">
+          <button id="btn-view-leads" class="btn btn-primary btn-full">View Leads Dashboard</button>
+        </div>
+      </div>
+
+      <!-- ── Keywords tab ── -->
+      <div id="tab-keywords" class="tab-panel hidden">
+        <div class="add-form">
+          <input type="text" id="keyword-input" placeholder="e.g. lawn mowing" maxlength="60" />
+          <button id="btn-add-keyword" class="btn btn-primary btn-sm">Add</button>
+        </div>
+        <div id="keyword-error" class="inline-error hidden"></div>
+        <ul id="keyword-list" class="item-list">
+          <li class="empty-msg">Loading…</li>
+        </ul>
+      </div>
+
+      <!-- ── Groups tab ── -->
+      <div id="tab-groups" class="tab-panel hidden">
+        <div class="add-form">
+          <input type="text" id="group-input" placeholder="https://facebook.com/groups/…" />
+          <button id="btn-add-group" class="btn btn-primary btn-sm">Add</button>
+        </div>
+        <div id="group-error" class="inline-error hidden"></div>
+        <ul id="group-list" class="item-list">
+          <li class="empty-msg">Loading…</li>
+        </ul>
+        <div id="trial-note" class="banner banner-info hidden">
+          Trial plan: up to 5 groups.
+        </div>
+      </div>
+
+    </div><!-- /view-logged-in -->
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
