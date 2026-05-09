@@ -35,8 +35,8 @@ export default function Landing() {
         </div>
 
         <h1>
-          <span style={{ display: 'block', whiteSpace: 'nowrap' }}>The first reply gets the job.</span>
-          <em style={{ display: 'block', whiteSpace: 'nowrap' }}>We make sure it's you.</em>
+          <span className="ls-h1-line">The first reply gets the job.</span>
+          <em className="ls-h1-line">We make sure it's you.</em>
         </h1>
         <p className="lede">
           LeadSnap watches your Facebook groups and texts you when someone needs your service — with a reply ready to send.
