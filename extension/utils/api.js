@@ -42,6 +42,10 @@ export function updateProfile(token, updates) {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(updates) }, token);
 }
 
+export function extractWebsite(token, url) {
+  return request('/api/profile/extract-website', { method: 'POST', body: JSON.stringify({ url }) }, token);
+}
+
 // ── Keywords ─────────────────────────────────────────────────────────────────
 
 export function getKeywords(token) {

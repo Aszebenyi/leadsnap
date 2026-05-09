@@ -66,9 +66,16 @@ Score guidelines:
 
 /**
  * Generate a short reply to a Facebook post.
+ * @param {string} postText
+ * @param {string} serviceDescription
+ * @param {string|null} websiteUrl - optional URL to naturally mention in the reply
  * @returns {string}
  */
-export async function generateReply(postText, serviceDescription) {
+export async function generateReply(postText, serviceDescription, websiteUrl = null) {
+  const urlInstruction = websiteUrl
+    ? `\n- If it flows naturally, include a brief mention of your website (${websiteUrl}) near the end`
+    : '';
+
   const message = await getClient().messages.create({
     model: MODEL,
     max_tokens: 256,
@@ -82,7 +89,7 @@ Rules:
 - End with a soft call to action (DM me, send me a message, etc)
 - Do not use hashtags
 - Do not be pushy or salesy
-- Sound like a real local person
+- Sound like a real local person${urlInstruction}
 
 Return the reply text only, no quotes, no explanation.`,
     messages: [
@@ -96,4 +103,42 @@ Return the reply text only, no quotes, no explanation.`,
   const reply = message.content[0]?.text?.trim() ?? '';
   if (!reply) throw new Error('Claude returned an empty reply');
   return reply;
+}
+
+/**
+ * Extract business info from a webpage's text content.
+ * @param {string} pageText - stripped plain text from the website (max 5 000 chars)
+ * @param {string} url - original URL (included for context)
+ * @returns {{ business_name: string|null, service_description: string, location: string|null, suggested_keywords: string[] }}
+ */
+export async function extractBusinessInfo(pageText, url) {
+  const message = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 512,
+    system: `Extract business information from this webpage text.
+
+Return JSON only — no markdown fences:
+{
+  "business_name": "<string or null>",
+  "service_description": "<1-2 sentence plain-English description of what they do>",
+  "location": "<city, state or null>",
+  "suggested_keywords": ["<kw1>", "<kw2>", ...]
+}
+
+suggested_keywords: 4-8 short phrases someone would post in a local Facebook group when looking for this service (e.g. "need a plumber asap", "lawn mowing", "dog boarding").`,
+    messages: [
+      {
+        role: 'user',
+        content: `Website: ${url}\n\n${pageText}`,
+      },
+    ],
+  });
+
+  const raw = message.content[0]?.text ?? '';
+  const json = raw.replace(/```(?:json)?\n?/g, '').trim();
+  try {
+    return JSON.parse(json);
+  } catch {
+    throw new Error(`Claude returned unparseable extraction: ${raw.slice(0, 120)}`);
+  }
 }

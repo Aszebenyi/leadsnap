@@ -8,7 +8,7 @@
 <body>
   <div class="card">
     <div class="logo">LeadSnap</div>
-    <p class="welcome">Let's get you set up in 3 quick steps.</p>
+    <p class="welcome">Let's get you set up in 7 quick steps.</p>
 
     <!-- Step indicators -->
     <div class="steps">
@@ -17,32 +17,63 @@
       <div class="step-dot" id="dot-2">2</div>
       <div class="step-line"></div>
       <div class="step-dot" id="dot-3">3</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-4">4</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-5">5</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-6">6</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-7">7</div>
     </div>
 
-    <!-- ── Step 1: Groups ── -->
+    <!-- ── Step 1: Connect Facebook ── -->
     <div class="step-panel visible" id="step-1">
-      <div class="step-title">Select Facebook Groups</div>
-      <p class="step-desc">Choose the groups you want LeadSnap to monitor. We'll scan them for posts matching your keywords.</p>
+      <div class="step-title">Connect Facebook</div>
+      <p class="step-desc">LeadSnap needs access to your Facebook groups to start monitoring for leads.</p>
 
-      <div class="groups-toolbar">
-        <span id="groups-counter" class="groups-counter">0/25 selected</span>
-        <button id="btn-load-groups" class="btn btn-sm btn-secondary">Load my groups</button>
-      </div>
-      <div id="groups-msg" class="groups-msg">Open Facebook in Chrome, then click "Load my groups".</div>
-      <div id="groups-list" class="checkbox-list">
-        <div class="empty-state">No groups loaded yet.</div>
-      </div>
+      <button id="btn-connect-fb" class="btn btn-facebook">
+        <!-- Facebook logo SVG -->
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+          <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+        </svg>
+        Continue with Facebook
+      </button>
 
-      <div class="action-row">
+      <p class="fb-connect-note">LeadSnap will load your groups automatically. We never post on your behalf.</p>
+
+      <div id="fb-status" class="fb-status"></div>
+
+      <div class="action-row" id="step1-action-row" style="display:none;">
         <button id="btn-step1-next" class="btn btn-primary">Next →</button>
       </div>
       <button class="skip-link" id="skip-1">Skip for now</button>
     </div>
 
-    <!-- ── Step 2: Keywords ── -->
+    <!-- ── Step 2: Select Groups ── -->
     <div class="step-panel" id="step-2">
+      <div class="step-title">Select Facebook Groups</div>
+      <p class="step-desc">Choose the groups you want LeadSnap to monitor. We'll scan them for posts matching your keywords.</p>
+
+      <div class="groups-toolbar">
+        <span id="groups-counter" class="groups-counter">0/25 selected</span>
+        <button id="btn-reload-groups" class="btn btn-sm btn-secondary">Reload groups</button>
+      </div>
+      <div id="groups-msg" class="groups-msg"></div>
+      <div id="groups-list" class="checkbox-list">
+        <div class="empty-state">No groups loaded yet.</div>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-step2-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step2-next" class="btn btn-primary">Next →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: Keywords ── -->
+    <div class="step-panel" id="step-3">
       <div class="step-title">Add Your Keywords</div>
-      <p class="step-desc">Words and phrases that signal someone needs your service. Add as many as you like.</p>
+      <p class="step-desc">Words and phrases that signal someone needs your service. Press Enter or click Add to save each one.</p>
 
       <div class="add-form">
         <input type="text" id="keyword-input" placeholder="e.g. lawn mowing" maxlength="60" />
@@ -54,16 +85,43 @@
       </div>
 
       <div class="action-row">
-        <button id="btn-step2-back" class="btn btn-secondary">← Back</button>
-        <button id="btn-step2-next" class="btn btn-primary">Next →</button>
+        <button id="btn-step3-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step3-next" class="btn btn-primary">Next →</button>
       </div>
-      <button class="skip-link" id="skip-2">Skip for now</button>
+      <button class="skip-link" id="skip-3">Skip for now</button>
     </div>
 
-    <!-- ── Step 3: AI Description ── -->
-    <div class="step-panel" id="step-3">
+    <!-- ── Step 4: Website Extractor ── -->
+    <div class="step-panel" id="step-4">
+      <div class="step-title">Extract From Your Website</div>
+      <p class="step-desc">Enter your website URL and we'll auto-fill your business info and suggest keywords. Completely optional.</p>
+
+      <div class="extract-form">
+        <input type="url" id="website-input" placeholder="https://yourbusiness.com" />
+        <button id="btn-extract" class="btn btn-sm btn-primary">Extract →</button>
+      </div>
+      <div id="extract-status" class="extract-status"></div>
+
+      <!-- Extracted results card -->
+      <div class="extracted-card" id="extracted-card">
+        <div class="extracted-card-name" id="extracted-name"></div>
+        <div class="extracted-card-location" id="extracted-location"></div>
+        <textarea class="extracted-card-desc" id="extracted-desc" rows="3" placeholder="Service description…"></textarea>
+        <div class="extracted-kw-label">Suggested keywords — tap to add:</div>
+        <div class="suggested-chips" id="suggested-chips"></div>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-step4-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step4-next" class="btn btn-primary">Next →</button>
+      </div>
+      <button class="skip-link" id="skip-4">Skip this step</button>
+    </div>
+
+    <!-- ── Step 5: AI Description ── -->
+    <div class="step-panel" id="step-5">
       <div class="step-title">Describe Your Ideal Lead</div>
-      <p class="step-desc">Claude AI will read every Facebook post through this lens — posts that match get scored higher and are more likely to trigger an alert.</p>
+      <p class="step-desc">Claude AI reads every Facebook post through this lens — posts that match get scored higher and are more likely to trigger an alert.</p>
 
       <textarea
         id="ai-description"
@@ -76,8 +134,60 @@
       </p>
 
       <div class="action-row">
-        <button id="btn-step3-back" class="btn btn-secondary">← Back</button>
-        <button id="btn-finish" class="btn btn-primary">Finish Setup ✓</button>
+        <button id="btn-step5-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step5-next" class="btn btn-primary">Next →</button>
+      </div>
+      <button class="skip-link" id="skip-5">Skip for now</button>
+    </div>
+
+    <!-- ── Step 6: Phone Number ── -->
+    <div class="step-panel" id="step-6">
+      <div class="step-title">Phone Number for SMS Alerts</div>
+      <p class="step-desc">We'll text you the moment a matching post is found — with an AI-generated reply ready to copy.</p>
+
+      <div class="phone-input-wrap">
+        <input type="tel" id="phone-input" placeholder="+1 (555) 000-0000" />
+        <p class="phone-hint">US numbers only. Standard message rates apply.</p>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-step6-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step6-next" class="btn btn-primary">Next →</button>
+      </div>
+      <button class="skip-link" id="skip-6">Skip — no SMS alerts</button>
+    </div>
+
+    <!-- ── Step 7: Finish & Toggle ── -->
+    <div class="step-panel" id="step-7">
+      <div class="step-title">Almost Done!</div>
+      <p class="step-desc">One last setting before you start monitoring.</p>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Include website link in AI replies</div>
+          <div class="toggle-label-sub">When on, your website URL is naturally mentioned in generated replies.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="include-website-toggle" />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <input
+        type="url"
+        id="final-website-url"
+        class="website-url-input"
+        placeholder="https://yourbusiness.com (optional)"
+      />
+
+      <div id="finish-loading" class="finish-loading">
+        <div class="spinner" style="margin: 0 auto 8px;"></div>
+        Setting up your account…
+      </div>
+
+      <div class="action-row" id="step7-action-row">
+        <button id="btn-step7-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-start-monitoring" class="btn btn-primary">Start Monitoring →</button>
       </div>
     </div>
   </div>

@@ -12,6 +12,9 @@ const SYNC_KEYS = {
   BUSINESS_DESCRIPTION: 'business_description',
   AI_DESCRIPTION:       'ai_description',
   ONBOARDING_COMPLETE:  'onboarding_complete',
+  PHONE_NUMBER:         'phone_number',
+  WEBSITE_URL:          'website_url',
+  INCLUDE_WEBSITE:      'include_website_in_replies',
 };
 
 const LOCAL_KEYS = {
@@ -68,6 +71,15 @@ export const setAiDescription      = (v) => chrome.storage.sync.set({ [SYNC_KEYS
 
 export const isOnboardingComplete  = () => syncGet(SYNC_KEYS.ONBOARDING_COMPLETE, false);
 export const setOnboardingComplete = ()  => chrome.storage.sync.set({ [SYNC_KEYS.ONBOARDING_COMPLETE]: true });
+
+export const getPhoneNumber      = () => syncGet(SYNC_KEYS.PHONE_NUMBER, '');
+export const setPhoneNumber      = (v) => chrome.storage.sync.set({ [SYNC_KEYS.PHONE_NUMBER]: v });
+
+export const getWebsiteUrl       = () => syncGet(SYNC_KEYS.WEBSITE_URL, '');
+export const setWebsiteUrl       = (v) => chrome.storage.sync.set({ [SYNC_KEYS.WEBSITE_URL]: v });
+
+export const getIncludeWebsite   = () => syncGet(SYNC_KEYS.INCLUDE_WEBSITE, false);
+export const setIncludeWebsite   = (v) => chrome.storage.sync.set({ [SYNC_KEYS.INCLUDE_WEBSITE]: v });
 
 // ── Local storage (larger, device-only) ──────────────────────────────────────
 

@@ -10,7 +10,29 @@
       "Bash(xargs kill -9)",
       "Bash(jobs)",
       "Bash(npm create *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(railway logs *)",
+      "Bash(railway status *)",
+      "Bash(railway service *)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\" https://leadsnap-backend-production.up.railway.app/health)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\" -X POST https://leadsnap-backend-production.up.railway.app/api/leads/ingest -H \"Content-Type: application/json\" -d '{}')",
+      "Bash(grep -v \"^$\")",
+      "Bash(railway variables *)",
+      "Bash(curl -sf https://leadsnap-backend-production.up.railway.app/health)",
+      "Bash(curl -s https://leadsnap-backend-production.up.railway.app/health)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(railway up *)",
+      "Bash(git -C /Users/anthony/Desktop/leadsnap add backend/src/lib/supabase.js backend/package.json backend/package-lock.json backend/Dockerfile)",
+      "Bash(git -C /Users/anthony/Desktop/leadsnap commit -m 'Fix Supabase ws transport and upgrade to node:22-alpine *)",
+      "Bash(git -C /Users/anthony/Desktop/leadsnap push)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(cp \"/Users/anthony/.claude/projects/-Users-anthony-Desktop-leadsnap/5bc0dfc4-2a78-4d06-9637-6f80403587ad/tool-results/webfetch-1778336632654-dyrldi.bin\" /tmp/design.gz)",
+      "Bash(gunzip -f /tmp/design.gz)",
+      "Read(//tmp/**)",
+      "Bash(mkdir -p design_extract)",
+      "Bash(tar -xf design -C design_extract)"
     ]
   }
 }

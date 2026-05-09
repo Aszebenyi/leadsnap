@@ -3,7 +3,7 @@ import {
   getAuthToken, getRefreshToken, setSession, clearSession,
   getSelectedGroups, getKeywords, getScanningEnabled,
   getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
-  getAiDescription,
+  getAiDescription, getWebsiteUrl, getIncludeWebsite,
 } from './utils/storage.js';
 import { ingestLead } from './utils/api.js';
 import { refreshToken, getUser } from './utils/supabase-auth.js';
@@ -320,12 +320,17 @@ async function handleLeadFound(payload) {
   const token = await getAuthToken();
   if (!token) throw new Error('Not authenticated');
 
-  // Fetch the AI description and attach to every ingest call
-  const aiDescription = await getAiDescription();
+  // Read user preferences and attach to every ingest call
+  const [aiDescription, websiteUrl, includeWebsite] = await Promise.all([
+    getAiDescription(),
+    getWebsiteUrl(),
+    getIncludeWebsite(),
+  ]);
 
   const lead = await ingestLead(token, {
     ...payload,
     ai_description: aiDescription || undefined,
+    website_url:    includeWebsite && websiteUrl ? websiteUrl : undefined,
     skip_sms:       payload.silent === true,
   });
 

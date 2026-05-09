@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import supabase from '../lib/supabase.js';
+import { extractBusinessInfo } from '../services/claude.js';
 
 const router = Router();
 
@@ -46,6 +47,52 @@ router.put('/', requireAuth, async (req, res, next) => {
     if (error) throw error;
 
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/profile/extract-website
+router.post('/extract-website', requireAuth, async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+
+    // Validate URL format before fetching
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return res.status(400).json({ error: 'URL must use http or https' });
+    }
+
+    // Fetch the page HTML (10s timeout, follow redirects)
+    let html;
+    try {
+      const r = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeadSnap/1.0; +https://leadsnap.app)' },
+        signal: AbortSignal.timeout(10_000),
+        redirect: 'follow',
+      });
+      html = await r.text();
+    } catch {
+      return res.status(422).json({ error: 'Could not fetch that URL. Check it and try again.' });
+    }
+
+    // Strip tags, collapse whitespace, cap at 5 000 chars for Claude
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 5_000);
+
+    const result = await extractBusinessInfo(text, url);
+    res.json(result);
   } catch (err) {
     next(err);
   }
