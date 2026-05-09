@@ -51,6 +51,6 @@ app.use((err, _req, res, _next) => {
   res.status(err.statusCode || 500).json({ error: err.message || 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`LeadSnap API running on port ${PORT}`);
 });
