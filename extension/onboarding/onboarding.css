@@ -26,7 +26,7 @@ body {
 .logo {
   font-size: 22px;
   font-weight: 700;
-  color: #3b82f6;
+  color: #f97316;
   text-align: center;
   margin-bottom: 8px;
 }
@@ -56,7 +56,7 @@ body {
   transition: background 0.2s, color 0.2s;
   flex-shrink: 0;
 }
-.step-dot.active   { background: #3b82f6; color: #fff; }
+.step-dot.active   { background: #f97316; color: #fff; }
 .step-dot.complete { background: #22c55e; color: #fff; }
 .step-line {
   flex: 1; height: 2px;
@@ -111,7 +111,7 @@ body {
 .group-item input[type="checkbox"] {
   flex-shrink: 0; width: 14px; height: 14px;
   margin-top: 2px;
-  cursor: pointer; accent-color: #3b82f6;
+  cursor: pointer; accent-color: #f97316;
 }
 .group-item.dimmed input[type="checkbox"] { cursor: not-allowed; }
 
@@ -145,7 +145,7 @@ body {
   font-size: 13px; outline: none;
   transition: border-color 0.15s;
 }
-.add-form input:focus { border-color: #3b82f6; }
+.add-form input:focus { border-color: #f97316; }
 
 .keyword-chips {
   display: flex; flex-wrap: wrap; gap: 6px;
@@ -154,18 +154,18 @@ body {
 }
 .chip {
   display: inline-flex; align-items: center; gap: 4px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
   border-radius: 99px;
   padding: 4px 10px;
-  font-size: 12px; color: #1e40af;
+  font-size: 12px; color: #c2410c;
 }
 .chip-remove {
   background: none; border: none;
-  color: #93c5fd; font-size: 14px; line-height: 1;
+  color: #fdba74; font-size: 14px; line-height: 1;
   cursor: pointer; padding: 0; margin-left: 2px;
 }
-.chip-remove:hover { color: #2563eb; }
+.chip-remove:hover { color: #ea580c; }
 .chips-hint {
   font-size: 12px; color: #9ca3af;
   margin-bottom: 4px;
@@ -186,7 +186,7 @@ body {
   transition: border-color 0.15s;
   margin-bottom: 8px;
 }
-.ai-textarea:focus { border-color: #3b82f6; }
+.ai-textarea:focus { border-color: #f97316; }
 .ai-hint {
   font-size: 12px; color: #6b7280;
   line-height: 1.5;
@@ -204,7 +204,7 @@ body {
 }
 .btn:hover { opacity: 0.85; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-primary  { background: #3b82f6; color: #fff; }
+.btn-primary  { background: #f97316; color: #fff; }
 .btn-secondary {
   background: #f3f4f6; color: #374151;
   border: 1px solid #e5e7eb;
@@ -276,7 +276,7 @@ body {
 .spinner {
   width: 16px; height: 16px;
   border: 2px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  border-top-color: #f97316;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -298,7 +298,7 @@ body {
   outline: none;
   transition: border-color 0.15s;
 }
-.extract-form input:focus { border-color: #3b82f6; }
+.extract-form input:focus { border-color: #f97316; }
 
 .extract-status {
   display: flex;
@@ -391,14 +391,14 @@ body {
   outline: none;
   transition: border-color 0.15s;
 }
-.phone-input-wrap input[type="tel"]:focus { border-color: #3b82f6; }
+.phone-input-wrap input[type="tel"]:focus { border-color: #f97316; }
 .phone-hint {
   font-size: 12px;
   color: #9ca3af;
   margin-top: 4px;
 }
 
-/* ── Toggle switch (Step 7) ── */
+/* ── Toggle switch (Step 4) ── */
 .toggle-row {
   display: flex;
   align-items: center;
@@ -449,7 +449,7 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .toggle-switch input:checked + .toggle-track {
-  background: #3b82f6;
+  background: #f97316;
 }
 .toggle-switch input:checked + .toggle-track::after {
   transform: translateX(18px);
@@ -465,7 +465,7 @@ body {
   transition: border-color 0.15s;
   margin-bottom: 16px;
 }
-.website-url-input:focus { border-color: #3b82f6; }
+.website-url-input:focus { border-color: #f97316; }
 
 /* ── Step dots for 7 steps ── */
 .steps { flex-wrap: wrap; gap: 0; row-gap: 4px; }

@@ -1,7 +1,7 @@
-// LeadSnap onboarding wizard — 7-step flow (ES module)
+// LeadSnap onboarding wizard — 6-step flow (ES module)
 
 const MAX_GROUPS   = 25;
-const TOTAL_STEPS  = 7;
+const TOTAL_STEPS  = 6;
 const FB_TAB_TIMEOUT_MS = 8_000;
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -10,7 +10,7 @@ let allDiscoveredGroups    = []; // [{ url, name, lastVisited }]
 let selectedGroupUrls      = new Set();
 let keywords               = []; // string[]
 let extractedDescription   = ''; // pre-fill for Step 5 from website extraction
-let extractedWebsiteUrl    = ''; // URL entered in Step 4 (carried to Step 7)
+let extractedWebsiteUrl    = ''; // URL entered in Step 4
 let suggestedKeywordStates = {}; // { kw: boolean } — true = selected
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -46,18 +46,17 @@ const extractedName    = document.getElementById('extracted-name');
 const extractedLoc     = document.getElementById('extracted-location');
 const extractedDesc    = document.getElementById('extracted-desc');
 const suggestedChips   = document.getElementById('suggested-chips');
+// Toggle lives in Step 4 now
+const includeToggle    = document.getElementById('include-website-toggle');
+const finalWebsiteUrl  = document.getElementById('final-website-url');
 
 // Step 5
 const aiTextarea       = document.getElementById('ai-description');
 
 // Step 6
 const phoneInput       = document.getElementById('phone-input');
-
-// Step 7
-const includeToggle    = document.getElementById('include-website-toggle');
-const finalWebsiteUrl  = document.getElementById('final-website-url');
 const finishLoading    = document.getElementById('finish-loading');
-const step7ActionRow   = document.getElementById('step7-action-row');
+const step6ActionRow   = document.getElementById('step6-action-row');
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
@@ -70,12 +69,12 @@ function goTo(step) {
   });
   currentStep = step;
 
-  // Pre-fill Step 5 textarea if we have an extracted description
+  // Pre-fill Step 5 textarea from website extraction result
   if (step === 5 && extractedDescription && !aiTextarea.value) {
     aiTextarea.value = extractedDescription;
   }
-  // Pre-fill Step 7 website URL from Step 4 entry
-  if (step === 7 && extractedWebsiteUrl && !finalWebsiteUrl.value) {
+  // Pre-fill Step 4 website URL field if already extracted
+  if (step === 4 && extractedWebsiteUrl && !finalWebsiteUrl.value) {
     finalWebsiteUrl.value = extractedWebsiteUrl;
   }
 }
@@ -91,16 +90,12 @@ async function connectFacebook() {
   let fbTabId = null;
 
   try {
-    // Open the Facebook groups feed
     const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/groups/feed', active: true });
     fbTabId = tab.id;
 
-    // Wait for the tab to finish loading (with timeout)
     await waitForTabComplete(fbTabId, FB_TAB_TIMEOUT_MS);
-
     setFbStatus('loading', 'Loading your groups…');
 
-    // Ask the content script to scrape the groups
     let response;
     try {
       response = await chrome.tabs.sendMessage(fbTabId, { type: 'LEADSNAP_GET_GROUPS' });
@@ -113,20 +108,14 @@ async function connectFacebook() {
       throw new Error('No groups found. Make sure you\'re a member of at least one group.');
     }
 
-    // Merge into allDiscoveredGroups
     const knownUrls = new Set(allDiscoveredGroups.map((g) => g.url));
     for (const g of fetched) {
-      if (!knownUrls.has(g.url)) {
-        allDiscoveredGroups.push(g);
-        knownUrls.add(g.url);
-      }
+      if (!knownUrls.has(g.url)) { allDiscoveredGroups.push(g); knownUrls.add(g.url); }
     }
 
     const count = allDiscoveredGroups.length;
     setFbStatus('success', `✓ ${count} group${count !== 1 ? 's' : ''} found`);
     step1ActionRow.style.display = 'flex';
-
-    // Auto-advance after a short pause
     setTimeout(() => goTo(2), 800);
 
   } catch (err) {
@@ -136,17 +125,16 @@ async function connectFacebook() {
 }
 
 function waitForTabComplete(tabId, timeoutMs) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const timer = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
-      resolve(); // Timeout — proceed anyway; tab may already be loaded
+      resolve();
     }, timeoutMs);
 
     function listener(updatedTabId, changeInfo) {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
         clearTimeout(timer);
         chrome.tabs.onUpdated.removeListener(listener);
-        // Small grace period for JS to render
         setTimeout(resolve, 600);
       }
     }
@@ -201,10 +189,7 @@ async function reloadGroups() {
 
     const knownUrls = new Set(allDiscoveredGroups.map((g) => g.url));
     for (const g of fetched) {
-      if (!knownUrls.has(g.url)) {
-        allDiscoveredGroups.push(g);
-        knownUrls.add(g.url);
-      }
+      if (!knownUrls.has(g.url)) { allDiscoveredGroups.push(g); knownUrls.add(g.url); }
     }
 
     setGroupsMsg(`${allDiscoveredGroups.length} group${allDiscoveredGroups.length !== 1 ? 's' : ''} found — select up to ${MAX_GROUPS} to monitor.`);
@@ -255,32 +240,27 @@ function renderGroupsList() {
   });
 }
 
-// Also render on page load if groups were already discovered in Step 1
-function initStep2() {
-  if (allDiscoveredGroups.length) renderGroupsList();
-}
-
 function setGroupsMsg(msg, isError = false) {
   groupsMsg.textContent = msg;
   groupsMsg.classList.toggle('error', isError);
 }
 
 document.getElementById('btn-step2-back').addEventListener('click', () => goTo(1));
-document.getElementById('btn-step2-next').addEventListener('click', () => { initStep2(); goTo(3); });
+document.getElementById('btn-step2-next').addEventListener('click', () => goTo(3));
 
 // ── Step 3: Keywords ──────────────────────────────────────────────────────────
 
 btnAddKw.addEventListener('click', addKeyword);
 keywordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addKeyword(); });
 
-function addKeyword(kw) {
-  const val = typeof kw === 'string' ? kw : keywordInput.value.trim().toLowerCase();
+function addKeyword(kwOverride) {
+  const val = typeof kwOverride === 'string' ? kwOverride : keywordInput.value.trim().toLowerCase();
   if (!val || keywords.includes(val)) {
-    if (typeof kw !== 'string') keywordInput.value = '';
+    if (typeof kwOverride !== 'string') keywordInput.value = '';
     return;
   }
   keywords.push(val);
-  if (typeof kw !== 'string') keywordInput.value = '';
+  if (typeof kwOverride !== 'string') keywordInput.value = '';
   renderKeywordChips();
 }
 
@@ -309,7 +289,7 @@ document.getElementById('btn-step3-back').addEventListener('click', () => goTo(2
 document.getElementById('btn-step3-next').addEventListener('click', () => goTo(4));
 document.getElementById('skip-3').addEventListener('click', () => goTo(4));
 
-// ── Step 4: Website Extractor ─────────────────────────────────────────────────
+// ── Step 4: Website Extractor + Toggle ───────────────────────────────────────
 
 btnExtract.addEventListener('click', extractWebsite);
 websiteInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') extractWebsite(); });
@@ -321,7 +301,6 @@ async function extractWebsite() {
     return;
   }
 
-  // Basic URL validation
   let parsedUrl;
   try {
     parsedUrl = new URL(url.startsWith('http') ? url : `https://${url}`);
@@ -341,20 +320,17 @@ async function extractWebsite() {
 
     const result = await callExtractWebsite(token, parsedUrl.href);
 
-    // Store the URL for use in Step 7
+    // Store URL — also pre-fill the toggle's website field
     extractedWebsiteUrl = parsedUrl.href;
+    if (!finalWebsiteUrl.value) finalWebsiteUrl.value = extractedWebsiteUrl;
 
-    // Populate the extracted card
-    extractedName.textContent     = result.business_name || '';
-    extractedName.style.display   = result.business_name ? 'block' : 'none';
-    extractedLoc.textContent      = result.location || '';
-    extractedLoc.style.display    = result.location ? 'block' : 'none';
-    extractedDesc.value           = result.service_description || '';
+    extractedName.textContent   = result.business_name || '';
+    extractedName.style.display = result.business_name ? 'block' : 'none';
+    extractedLoc.textContent    = result.location || '';
+    extractedLoc.style.display  = result.location ? 'block' : 'none';
+    extractedDesc.value         = result.service_description || '';
+    extractedDescription        = result.service_description || '';
 
-    // Store for pre-fill of Step 5
-    extractedDescription = result.service_description || '';
-
-    // Render suggested keyword chips
     const suggested = result.suggested_keywords || [];
     suggestedKeywordStates = {};
     suggested.forEach((kw) => { suggestedKeywordStates[kw] = false; });
@@ -392,7 +368,7 @@ function renderSuggestedChips(suggested) {
 function setExtractStatus(type, text) {
   if (!type && !text) {
     extractStatus.textContent = '';
-    extractStatus.className = 'extract-status';
+    extractStatus.className   = 'extract-status';
     return;
   }
   extractStatus.className = `extract-status${type === 'error' ? ' error' : ''}`;
@@ -405,11 +381,11 @@ function setExtractStatus(type, text) {
 
 document.getElementById('btn-step4-back').addEventListener('click', () => goTo(3));
 document.getElementById('btn-step4-next').addEventListener('click', () => {
-  // Merge selected suggested keywords into keywords list
+  // Merge selected suggested keywords into main keywords list
   Object.entries(suggestedKeywordStates).forEach(([kw, selected]) => {
     if (selected && !keywords.includes(kw)) keywords.push(kw);
   });
-  // Update extractedDescription from textarea in case user edited it
+  // Capture any manual edits to the extracted description textarea
   if (extractedDesc.value.trim()) extractedDescription = extractedDesc.value.trim();
   renderKeywordChips();
   goTo(5);
@@ -422,40 +398,37 @@ document.getElementById('btn-step5-back').addEventListener('click', () => goTo(4
 document.getElementById('btn-step5-next').addEventListener('click', () => goTo(6));
 document.getElementById('skip-5').addEventListener('click', () => goTo(6));
 
-// ── Step 6: Phone Number ──────────────────────────────────────────────────────
+// ── Step 6: Phone + Finish ────────────────────────────────────────────────────
 
 document.getElementById('btn-step6-back').addEventListener('click', () => goTo(5));
-document.getElementById('btn-step6-next').addEventListener('click', () => goTo(7));
-document.getElementById('skip-6').addEventListener('click', () => goTo(7));
-
-// ── Step 7: Finish ────────────────────────────────────────────────────────────
-
-document.getElementById('btn-step7-back').addEventListener('click', () => goTo(6));
 document.getElementById('btn-start-monitoring').addEventListener('click', finishOnboarding);
+document.getElementById('skip-6').addEventListener('click', finishOnboarding);
 
 async function finishOnboarding() {
   // Show loading state
   finishLoading.classList.add('visible');
-  step7ActionRow.style.display = 'none';
+  step6ActionRow.style.display  = 'none';
+  const skipBtn = document.getElementById('skip-6');
+  if (skipBtn) skipBtn.style.display = 'none';
 
   try {
-    const selectedGroups   = allDiscoveredGroups.filter((g) => selectedGroupUrls.has(g.url));
-    const aiDescription    = aiTextarea.value.trim();
-    const phoneNumber      = phoneInput.value.trim();
-    const websiteUrl       = finalWebsiteUrl.value.trim() || extractedWebsiteUrl || '';
-    const includeWebsite   = includeToggle.checked;
+    const selectedGroups = allDiscoveredGroups.filter((g) => selectedGroupUrls.has(g.url));
+    const aiDescription  = aiTextarea.value.trim();
+    const phoneNumber    = phoneInput.value.trim();
+    const websiteUrl     = finalWebsiteUrl.value.trim() || extractedWebsiteUrl || '';
+    const includeWebsite = includeToggle.checked;
 
-    // ── 1. Save all settings to chrome.storage.sync atomically ──────────────
+    // ── 1. Save everything to chrome.storage.sync atomically ─────────────────
     await new Promise((resolve, reject) => {
       chrome.storage.sync.set(
         {
-          selected_groups:              selectedGroups,
-          keywords:                     keywords,
-          ai_description:               aiDescription,
-          phone_number:                 phoneNumber,
-          website_url:                  websiteUrl,
-          include_website_in_replies:   includeWebsite,
-          onboarding_complete:          true,
+          selected_groups:            selectedGroups,
+          keywords:                   keywords,
+          ai_description:             aiDescription,
+          phone_number:               phoneNumber,
+          website_url:                websiteUrl,
+          include_website_in_replies: includeWebsite,
+          onboarding_complete:        true,
         },
         () => {
           if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
@@ -464,40 +437,36 @@ async function finishOnboarding() {
       );
     });
 
-    // ── 2. Save profile to backend if phone number or description provided ───
+    // ── 2. Save profile to backend (phone + description) ──────────────────────
     if (phoneNumber || aiDescription) {
       try {
         const token = await getAuthToken();
         if (token) {
           const updates = {};
-          if (phoneNumber) updates.phone_number = phoneNumber;
+          if (phoneNumber)   updates.phone_number        = phoneNumber;
           if (aiDescription) updates.service_description = aiDescription;
           await callUpdateProfile(token, updates);
         }
       } catch (err) {
-        // Non-fatal — storage already saved; profile sync can retry
         console.warn('[LeadSnap] Profile save failed:', err.message);
       }
     }
 
-    // ── 3. Trigger a silent first scan in the background ────────────────────
-    try {
-      chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' });
-    } catch {
-      // Extension background may not be ready yet — that's fine
-    }
+    // ── 3. Trigger silent first scan ──────────────────────────────────────────
+    try { chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' }); } catch { /* ignore */ }
 
-    // ── 4. Close this tab ────────────────────────────────────────────────────
+    // ── 4. Done ───────────────────────────────────────────────────────────────
     window.close();
 
   } catch (err) {
     finishLoading.classList.remove('visible');
-    step7ActionRow.style.display = 'flex';
+    step6ActionRow.style.display = 'flex';
+    if (skipBtn) skipBtn.style.display = '';
     alert('Failed to save settings: ' + err.message);
   }
 }
 
-// ── API helpers (inline so we don't need ES module imports from extension utils) ──
+// ── API helpers ───────────────────────────────────────────────────────────────
 
 async function getAuthToken() {
   return new Promise((resolve) =>
@@ -508,10 +477,7 @@ async function getAuthToken() {
 async function callExtractWebsite(token, url) {
   const res = await fetch('https://leadsnap-backend-production.up.railway.app/api/profile/extract-website', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ url }),
   });
   if (!res.ok) {
@@ -524,10 +490,7 @@ async function callExtractWebsite(token, url) {
 async function callUpdateProfile(token, updates) {
   const res = await fetch('https://leadsnap-backend-production.up.railway.app/api/profile', {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(updates),
   });
   if (!res.ok) {

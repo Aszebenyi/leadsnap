@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+
 let _client;
 function getClient() {
   if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -11,6 +12,9 @@ const MODEL = 'claude-3-5-haiku-latest';
 /**
  * Score a Facebook post for buyer intent.
  * @returns {{ score: number, reason: string, urgent: boolean }}
+ *
+ * TODO post-launch: implement feedback loop where leads marked as won/lost update
+ * scoring weights for this user's ideal lead description.
  */
 export async function scoreLead(postText, serviceDescription, aiDescription = '') {
   const extraContext = aiDescription

@@ -8,9 +8,9 @@
 <body>
   <div class="card">
     <div class="logo">LeadSnap</div>
-    <p class="welcome">Let's get you set up in 7 quick steps.</p>
+    <p class="welcome">Let's get you set up in 6 quick steps.</p>
 
-    <!-- Step indicators -->
+    <!-- Step indicators (6 dots) -->
     <div class="steps">
       <div class="step-dot active" id="dot-1">1</div>
       <div class="step-line"></div>
@@ -23,8 +23,6 @@
       <div class="step-dot" id="dot-5">5</div>
       <div class="step-line"></div>
       <div class="step-dot" id="dot-6">6</div>
-      <div class="step-line"></div>
-      <div class="step-dot" id="dot-7">7</div>
     </div>
 
     <!-- ── Step 1: Connect Facebook ── -->
@@ -33,7 +31,6 @@
       <p class="step-desc">LeadSnap needs access to your Facebook groups to start monitoring for leads.</p>
 
       <button id="btn-connect-fb" class="btn btn-facebook">
-        <!-- Facebook logo SVG -->
         <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
           <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
         </svg>
@@ -91,7 +88,7 @@
       <button class="skip-link" id="skip-3">Skip for now</button>
     </div>
 
-    <!-- ── Step 4: Website Extractor ── -->
+    <!-- ── Step 4: Website Extractor + Toggle ── -->
     <div class="step-panel" id="step-4">
       <div class="step-title">Extract From Your Website</div>
       <p class="step-desc">Enter your website URL and we'll auto-fill your business info and suggest keywords. Completely optional.</p>
@@ -110,6 +107,25 @@
         <div class="extracted-kw-label">Suggested keywords — tap to add:</div>
         <div class="suggested-chips" id="suggested-chips"></div>
       </div>
+
+      <!-- Include website toggle (consolidated from old Step 7) -->
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Include website link in AI replies</div>
+          <div class="toggle-label-sub">When on, your website URL is naturally mentioned in generated replies.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="include-website-toggle" />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <input
+        type="url"
+        id="final-website-url"
+        class="website-url-input"
+        placeholder="https://yourbusiness.com (optional)"
+      />
 
       <div class="action-row">
         <button id="btn-step4-back" class="btn btn-secondary">← Back</button>
@@ -140,56 +156,28 @@
       <button class="skip-link" id="skip-5">Skip for now</button>
     </div>
 
-    <!-- ── Step 6: Phone Number ── -->
+    <!-- ── Step 6: Phone Number + Start Monitoring ── -->
     <div class="step-panel" id="step-6">
       <div class="step-title">Phone Number for SMS Alerts</div>
       <p class="step-desc">We'll text you the moment a matching post is found — with an AI-generated reply ready to copy.</p>
 
       <div class="phone-input-wrap">
         <input type="tel" id="phone-input" placeholder="+1 (555) 000-0000" />
-        <p class="phone-hint">US numbers only. Standard message rates apply.</p>
+        <p class="phone-hint">Any country. Standard message rates apply.</p>
       </div>
-
-      <div class="action-row">
-        <button id="btn-step6-back" class="btn btn-secondary">← Back</button>
-        <button id="btn-step6-next" class="btn btn-primary">Next →</button>
-      </div>
-      <button class="skip-link" id="skip-6">Skip — no SMS alerts</button>
-    </div>
-
-    <!-- ── Step 7: Finish & Toggle ── -->
-    <div class="step-panel" id="step-7">
-      <div class="step-title">Almost Done!</div>
-      <p class="step-desc">One last setting before you start monitoring.</p>
-
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-label">Include website link in AI replies</div>
-          <div class="toggle-label-sub">When on, your website URL is naturally mentioned in generated replies.</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="include-website-toggle" />
-          <span class="toggle-track"></span>
-        </label>
-      </div>
-
-      <input
-        type="url"
-        id="final-website-url"
-        class="website-url-input"
-        placeholder="https://yourbusiness.com (optional)"
-      />
 
       <div id="finish-loading" class="finish-loading">
         <div class="spinner" style="margin: 0 auto 8px;"></div>
         Setting up your account…
       </div>
 
-      <div class="action-row" id="step7-action-row">
-        <button id="btn-step7-back" class="btn btn-secondary">← Back</button>
+      <div class="action-row" id="step6-action-row">
+        <button id="btn-step6-back" class="btn btn-secondary">← Back</button>
         <button id="btn-start-monitoring" class="btn btn-primary">Start Monitoring →</button>
       </div>
+      <button class="skip-link" id="skip-6">Skip — no SMS alerts</button>
     </div>
+
   </div>
 
   <script type="module" src="onboarding.js"></script>

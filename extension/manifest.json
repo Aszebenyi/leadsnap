@@ -39,7 +39,8 @@
     "alarms",
     "tabs",
     "notifications",
-    "windows"
+    "windows",
+    "identity"
   ],
 
   "web_accessible_resources": [
