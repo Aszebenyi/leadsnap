@@ -42,7 +42,7 @@ async function isDailySmsCapped(userId) {
 
 router.post('/ingest', requireAuth, requireSubscription, async (req, res, next) => {
   try {
-    const { post_text, post_url, author_name, group_name, group_url, matched_keywords } = req.body;
+    const { post_text, post_url, author_name, group_name, group_url, matched_keywords, ai_description, skip_sms } = req.body;
 
     if (!post_text) {
       return res.status(400).json({ error: 'post_text is required' });
@@ -61,7 +61,7 @@ router.post('/ingest', requireAuth, requireSubscription, async (req, res, next) 
 
     // ── Score and generate reply in parallel ─────────────────────────────────
     const [scoring, aiReply] = await Promise.allSettled([
-      scoreLead(post_text, serviceDescription),
+      scoreLead(post_text, serviceDescription, ai_description || ''),
       generateReply(post_text, serviceDescription),
     ]);
 
@@ -98,7 +98,7 @@ router.post('/ingest', requireAuth, requireSubscription, async (req, res, next) 
 
     // ── Send SMS alert ───────────────────────────────────────────────────────
     const phoneNumber = profile?.phone_number;
-    if (phoneNumber) {
+    if (phoneNumber && !skip_sms) {
       const capped = await isDailySmsCapped(req.user.id);
       if (capped) {
         console.log(`[LeadSnap] Daily SMS cap reached for user ${req.user.id} — skipping alert`);

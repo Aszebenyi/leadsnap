@@ -52,10 +52,22 @@ form.addEventListener('submit', async (e) => {
     }
 
     await storeSession(result);
-    showSuccess('Signed in! You can close this tab.');
 
-    // Close tab after a short delay so user sees the confirmation
-    setTimeout(() => window.close(), 1500);
+    // If first time, open onboarding wizard; otherwise close
+    const complete = await new Promise((r) =>
+      chrome.storage.sync.get('onboarding_complete', (d) => r(!!d.onboarding_complete))
+    );
+
+    if (!complete) {
+      showSuccess('Account ready! Starting setup…');
+      setTimeout(() => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+        window.close();
+      }, 800);
+    } else {
+      showSuccess('Signed in! You can close this tab.');
+      setTimeout(() => window.close(), 1500);
+    }
 
   } catch (err) {
     showError(err.message);

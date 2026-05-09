@@ -12,7 +12,11 @@ const MODEL = 'claude-3-5-haiku-latest';
  * Score a Facebook post for buyer intent.
  * @returns {{ score: number, reason: string, urgent: boolean }}
  */
-export async function scoreLead(postText, serviceDescription) {
+export async function scoreLead(postText, serviceDescription, aiDescription = '') {
+  const extraContext = aiDescription
+    ? `\nThe business owner describes their ideal lead as: "${aiDescription}"\nUse this to calibrate buyer intent beyond keyword matching — weight posts that match this description more heavily.`
+    : '';
+
   const message = await getClient().messages.create({
     model: MODEL,
     max_tokens: 256,
@@ -31,7 +35,7 @@ Score guidelines:
 - 7-8: Looking for a service, likely to hire soon
 - 5-6: Possibly looking, but unclear
 - 3-4: Asking for recommendation for someone else
-- 1-2: Not a job request at all`,
+- 1-2: Not a job request at all${extraContext}`,
     messages: [
       {
         role: 'user',

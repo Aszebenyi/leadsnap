@@ -10,6 +10,8 @@ const SYNC_KEYS = {
   SELECTED_GROUPS:      'selected_groups',
   SCANNING_ENABLED:     'scanning_enabled',
   BUSINESS_DESCRIPTION: 'business_description',
+  AI_DESCRIPTION:       'ai_description',
+  ONBOARDING_COMPLETE:  'onboarding_complete',
 };
 
 const LOCAL_KEYS = {
@@ -60,6 +62,12 @@ export const setScanningEnabled    = (v) => chrome.storage.sync.set({ [SYNC_KEYS
 
 export const getBusinessDescription = () => syncGet(SYNC_KEYS.BUSINESS_DESCRIPTION, '');
 export const setBusinessDescription = (v) => chrome.storage.sync.set({ [SYNC_KEYS.BUSINESS_DESCRIPTION]: v });
+
+export const getAiDescription      = () => syncGet(SYNC_KEYS.AI_DESCRIPTION, '');
+export const setAiDescription      = (v) => chrome.storage.sync.set({ [SYNC_KEYS.AI_DESCRIPTION]: v });
+
+export const isOnboardingComplete  = () => syncGet(SYNC_KEYS.ONBOARDING_COMPLETE, false);
+export const setOnboardingComplete = ()  => chrome.storage.sync.set({ [SYNC_KEYS.ONBOARDING_COMPLETE]: true });
 
 // ── Local storage (larger, device-only) ──────────────────────────────────────
 

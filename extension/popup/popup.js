@@ -12,6 +12,7 @@ import {
   getLastScanAt,
   getSelectedGroups,
   setSelectedGroups,
+  isOnboardingComplete,
 } from '../utils/storage.js';
 
 const DASHBOARD_URL = 'https://leadsnap-weld.vercel.app';
@@ -54,6 +55,15 @@ async function init() {
   showView('loading');
   token = await getAuthToken();
   if (!token) { showView('logged-out'); return; }
+
+  // If onboarding hasn't been completed yet, redirect there
+  const onboarded = await isOnboardingComplete();
+  if (!onboarded) {
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+    window.close();
+    return;
+  }
+
   showView('logged-in');
   await Promise.all([loadStatus(), loadKeywords(), initGroupsTab()]);
 }
@@ -270,6 +280,7 @@ function renderGroupsList() {
         <div class="group-item-text">
           <div class="group-item-name">${escHtml(g.name)}</div>
           <div class="group-item-url">${escHtml(shortUrl(g.url))}</div>
+          ${g.lastVisited ? `<div class="group-item-visited">${escHtml(g.lastVisited)}</div>` : ''}
         </div>
       </label>
     `;
@@ -351,6 +362,10 @@ document.getElementById('btn-add-keyword').addEventListener('click', addKeyword)
 keywordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addKeyword(); });
 
 document.getElementById('btn-scan-groups').addEventListener('click', () => scanForGroups());
+document.getElementById('btn-scan-now').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' });
+  window.close(); // monitor window takes over
+});
 document.getElementById('btn-save-groups').addEventListener('click', saveGroups);
 
 toggleScanning.addEventListener('change', (e) => {

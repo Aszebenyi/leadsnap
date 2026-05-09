@@ -243,5 +243,9 @@ body {
   font-size: 11px; color: #9ca3af;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.group-item-visited {
+  font-size: 10px; color: #d1d5db;
+  margin-top: 1px;
+}
 
 .save-row { margin-top: 2px; }

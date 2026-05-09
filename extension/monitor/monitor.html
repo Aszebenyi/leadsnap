@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LeadSnap — Scanning</title>
+  <link rel="stylesheet" href="monitor.css" />
+</head>
+<body>
+  <div class="monitor-card">
+    <div id="spinner" class="spinner"></div>
+    <div id="done-icon" class="done-icon">✅</div>
+
+    <div class="monitor-title" id="title">Monitoring in Progress</div>
+    <div class="monitor-subtitle" id="subtitle">Scanning your Facebook groups for new leads…</div>
+
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-label" id="progress-label">Starting…</div>
+    <div class="group-name" id="group-name"></div>
+
+    <button class="btn-cancel" id="btn-cancel">Cancel</button>
+  </div>
+
+  <script src="monitor.js"></script>
+</body>
+</html>

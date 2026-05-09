@@ -3,6 +3,7 @@ import {
   getAuthToken, getRefreshToken, setSession, clearSession,
   getSelectedGroups, getKeywords, getScanningEnabled,
   getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
+  getAiDescription,
 } from './utils/storage.js';
 import { ingestLead } from './utils/api.js';
 import { refreshToken, getUser } from './utils/supabase-auth.js';
@@ -59,20 +60,27 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 // ── Scan cycle ────────────────────────────────────────────────────────────────
 
-async function runScanCycle() {
-  console.log('[LeadSnap] Scan cycle started');
+/**
+ * @param {object} opts
+ * @param {boolean} opts.silent       - true → skip SMS + Chrome notifications (manual/initial scan)
+ * @param {number|null} opts.monitorTabId - tab ID of the monitor window to send progress to
+ */
+async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
+  console.log('[LeadSnap] Scan cycle started', silent ? '(silent)' : '');
 
   // ── Pre-flight checks ────────────────────────────────────────────────────────
 
   const token = await getAuthToken();
   if (!token) {
     console.log('[LeadSnap] No auth token — skipping scan');
+    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
     return;
   }
 
   const enabled = await getScanningEnabled();
   if (!enabled) {
     console.log('[LeadSnap] Scanning disabled — skipping scan');
+    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
     return;
   }
 
@@ -84,36 +92,49 @@ async function runScanCycle() {
   }
   if (!isSubscriptionAllowed(status)) {
     console.log('[LeadSnap] Subscription inactive — skipping scan');
+    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
     return;
   }
 
   const [groups, keywords] = await Promise.all([getSelectedGroups(), getKeywords()]);
   if (!groups.length) {
     console.log('[LeadSnap] No groups selected — skipping scan');
+    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
     return;
   }
   if (!keywords.length) {
     console.log('[LeadSnap] No keywords configured — skipping scan');
+    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
     return;
   }
 
   // ── Message group-page tabs ──────────────────────────────────────────────────
-  // Pre-filter to Facebook group pages only. The content script also checks
-  // this, but filtering here avoids unnecessary IPC to unrelated FB tabs.
 
   const tabs = await chrome.tabs.query({ url: FACEBOOK_GROUP_URL_PATTERN });
   if (!tabs.length) {
     console.log('[LeadSnap] No Facebook group tabs open — skipping scan');
+    sendToMonitor(monitorTabId, { type: 'SCAN_NO_TABS' });
     return;
   }
 
   let totalFound = 0;
-  for (const tab of tabs) {
+  for (let i = 0; i < tabs.length; i++) {
+    const tab = tabs[i];
+
+    // Send progress update to monitor window (best-effort)
+    sendToMonitor(monitorTabId, {
+      type:      'SCAN_PROGRESS',
+      groupName: tab.title || tab.url,
+      current:   i + 1,
+      total:     tabs.length,
+    });
+
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         type: 'LEADSNAP_SCAN',
         keywords,
         groups,
+        silent,
       });
       if (response?.found) totalFound += response.found;
     } catch (err) {
@@ -124,6 +145,48 @@ async function runScanCycle() {
 
   await setLastScanAt(Date.now());
   console.log(`[LeadSnap] Scan cycle complete — ${totalFound} new lead(s) submitted`);
+
+  sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: totalFound });
+}
+
+/** Send a message to the monitor window tab, ignoring any errors */
+function sendToMonitor(tabId, message) {
+  if (!tabId) return;
+  chrome.tabs.sendMessage(tabId, message).catch(() => {
+    // Monitor window may have been closed — ignore
+  });
+}
+
+// ── Manual scan (triggered from popup) ───────────────────────────────────────
+
+let manualScanCancelled = false;
+
+async function runManualScan() {
+  manualScanCancelled = false;
+
+  // Open the monitor window
+  const monitorUrl = chrome.runtime.getURL('monitor/monitor.html');
+  let monitorTabId = null;
+
+  try {
+    const win = await chrome.windows.create({
+      url:    monitorUrl,
+      type:   'popup',
+      width:  420,
+      height: 320,
+      focused: true,
+    });
+    // The new window has exactly one tab
+    monitorTabId = win.tabs?.[0]?.id ?? null;
+  } catch (err) {
+    console.error('[LeadSnap] Could not open monitor window:', err.message);
+    // Fall through — scan will still run, just without the progress window
+  }
+
+  // Small delay so the monitor page can load and register its message listener
+  await sleep(400);
+
+  await runScanCycle({ silent: true, monitorTabId });
 }
 
 // ── Token validation + refresh ────────────────────────────────────────────────
@@ -159,9 +222,6 @@ async function validateAndRefreshToken() {
 }
 
 // ── Subscription probe ────────────────────────────────────────────────────────
-// Hits the subscription-gated ingest endpoint as a lightweight status check.
-// 400 or 501 → middleware passed → subscription is active.
-// 403 SUBSCRIPTION_REQUIRED → subscription lapsed.
 
 async function probeSubscription() {
   const token = await getAuthToken();
@@ -189,7 +249,6 @@ async function probeSubscription() {
     await setSubscriptionStatus(SUBSCRIPTION_STATUS.ACTIVE);
     console.log('[LeadSnap] Subscription active');
   } catch (err) {
-    // Network error — keep last known cached status, don't overwrite
     console.warn('[LeadSnap] Subscription probe network error:', err.message);
   }
 }
@@ -198,6 +257,10 @@ async function probeSubscription() {
 
 function isSubscriptionAllowed(status) {
   return status === SUBSCRIPTION_STATUS.TRIAL || status === SUBSCRIPTION_STATUS.ACTIVE;
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -234,6 +297,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
+  if (message.type === 'LEADSNAP_MANUAL_SCAN') {
+    runManualScan()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.type === 'SCAN_CANCEL') {
+    manualScanCancelled = true;
+    sendResponse({ ok: true });
+    return;
+  }
+
   if (message.type === 'LEADSNAP_GET_STATUS') {
     getStatus().then(sendResponse);
     return true;
@@ -244,11 +320,20 @@ async function handleLeadFound(payload) {
   const token = await getAuthToken();
   if (!token) throw new Error('Not authenticated');
 
-  const lead = await ingestLead(token, payload);
+  // Fetch the AI description and attach to every ingest call
+  const aiDescription = await getAiDescription();
 
-  // Show a Chrome notification and increment the badge for each new lead
-  showLeadNotification(lead);
-  incrementBadge();
+  const lead = await ingestLead(token, {
+    ...payload,
+    ai_description: aiDescription || undefined,
+    skip_sms:       payload.silent === true,
+  });
+
+  // Only notify user for background (non-silent) scans
+  if (!payload.silent) {
+    showLeadNotification(lead);
+    incrementBadge();
+  }
 
   return lead;
 }

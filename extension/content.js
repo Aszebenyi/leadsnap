@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type !== 'LEADSNAP_SCAN') return;
 
-  const { keywords, groups } = message;
+  const { keywords, groups, silent = false } = message;
 
   // Only scan if we're on a Facebook group page
   if (!isFacebookGroupPage()) {
@@ -35,7 +35,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
-  scrapeAndSubmit(keywords, groups)
+  scrapeAndSubmit(keywords, groups, silent)
     .then((found) => sendResponse({ status: 'ok', found }))
     .catch((err) => {
       console.error('[LeadSnap] Scrape error:', err);
@@ -89,6 +89,9 @@ function getGroupName(groups) {
 
 const EXCLUDED_PATHS = /^\/groups\/(feed|discover|create|joins|category|search|notifications|requests|invite)/;
 
+// Matches time-relative strings Facebook uses for "last visited" labels
+const LAST_VISITED_RE = /\d+\s*(minute|hour|day|week|month|year)s?\s*ago|yesterday|today|just now/i;
+
 function extractGroupsFromDOM() {
   const seen = new Set();
   const groups = [];
@@ -117,15 +120,42 @@ function extractGroupsFromDOM() {
 
     if (!name || name.length < 2) return;
 
-    groups.push({ url, name });
+    // Best-effort last-visited extraction: walk up a few ancestor levels and
+    // look for a sibling/descendant span with a time-relative string.
+    const lastVisited = extractLastVisited(link);
+
+    groups.push({ url, name, lastVisited });
   });
 
   return groups;
 }
 
+/**
+ * Try to find a "last visited" label near a group link by walking up the DOM
+ * up to 4 ancestors and scanning all descendant text nodes.
+ */
+function extractLastVisited(link) {
+  let node = link;
+  for (let i = 0; i < 4; i++) {
+    node = node.parentElement;
+    if (!node) break;
+    // Scan all span/div children for a time-relative string
+    const candidates = node.querySelectorAll('span, div');
+    for (const el of candidates) {
+      // Skip elements that contain the link itself (to avoid picking up group name)
+      if (el.contains(link)) continue;
+      const text = el.innerText?.trim();
+      if (text && LAST_VISITED_RE.test(text) && text.length < 60) {
+        return text;
+      }
+    }
+  }
+  return null;
+}
+
 // ── Main scrape + submit flow ─────────────────────────────────────────────────
 
-async function scrapeAndSubmit(keywords, groups) {
+async function scrapeAndSubmit(keywords, groups, silent = false) {
   const seenIds = await getSeenPostIds();
   const posts = scrapePosts();
 
@@ -159,6 +189,7 @@ async function scrapeAndSubmit(keywords, groups) {
             group_name:       groupName,
             group_url:        groupUrl,
             matched_keywords: matched,
+            silent,
           },
         },
         (res) => resolve(res || {})

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LeadSnap — Setup</title>
+  <link rel="stylesheet" href="onboarding.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="logo">LeadSnap</div>
+    <p class="welcome">Let's get you set up in 3 quick steps.</p>
+
+    <!-- Step indicators -->
+    <div class="steps">
+      <div class="step-dot active" id="dot-1">1</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-2">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-3">3</div>
+    </div>
+
+    <!-- ── Step 1: Groups ── -->
+    <div class="step-panel visible" id="step-1">
+      <div class="step-title">Select Facebook Groups</div>
+      <p class="step-desc">Choose the groups you want LeadSnap to monitor. We'll scan them for posts matching your keywords.</p>
+
+      <div class="groups-toolbar">
+        <span id="groups-counter" class="groups-counter">0/25 selected</span>
+        <button id="btn-load-groups" class="btn btn-sm btn-secondary">Load my groups</button>
+      </div>
+      <div id="groups-msg" class="groups-msg">Open Facebook in Chrome, then click "Load my groups".</div>
+      <div id="groups-list" class="checkbox-list">
+        <div class="empty-state">No groups loaded yet.</div>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-step1-next" class="btn btn-primary">Next →</button>
+      </div>
+      <button class="skip-link" id="skip-1">Skip for now</button>
+    </div>
+
+    <!-- ── Step 2: Keywords ── -->
+    <div class="step-panel" id="step-2">
+      <div class="step-title">Add Your Keywords</div>
+      <p class="step-desc">Words and phrases that signal someone needs your service. Add as many as you like.</p>
+
+      <div class="add-form">
+        <input type="text" id="keyword-input" placeholder="e.g. lawn mowing" maxlength="60" />
+        <button id="btn-add-kw" class="btn btn-sm btn-primary">Add</button>
+      </div>
+      <p class="chips-hint">Your keywords:</p>
+      <div class="keyword-chips" id="keyword-chips">
+        <span style="color:#9ca3af;font-size:12px">None yet</span>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-step2-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step2-next" class="btn btn-primary">Next →</button>
+      </div>
+      <button class="skip-link" id="skip-2">Skip for now</button>
+    </div>
+
+    <!-- ── Step 3: AI Description ── -->
+    <div class="step-panel" id="step-3">
+      <div class="step-title">Describe Your Ideal Lead</div>
+      <p class="step-desc">Claude AI will read every Facebook post through this lens — posts that match get scored higher and are more likely to trigger an alert.</p>
+
+      <textarea
+        id="ai-description"
+        class="ai-textarea"
+        placeholder="e.g. Anyone looking for a dog boarder, pet sitter, or someone to walk their dog while they travel or go on holiday"
+        maxlength="500"
+      ></textarea>
+      <p class="ai-hint">
+        <strong>Be specific.</strong> Mention the type of customer, the service they need, and any urgency signals (e.g. "leaving next week", "asap", "emergency").
+      </p>
+
+      <div class="action-row">
+        <button id="btn-step3-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-finish" class="btn btn-primary">Finish Setup ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="onboarding.js"></script>
+</body>
+</html>
