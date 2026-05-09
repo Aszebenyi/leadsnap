@@ -1,7 +1,7 @@
 // LeadSnap background service worker (MV3)
 import {
   getAuthToken, getRefreshToken, setSession, clearSession,
-  getGroups, getKeywords, getScanningEnabled,
+  getSelectedGroups, getKeywords, getScanningEnabled,
   getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
 } from './utils/storage.js';
 import { ingestLead } from './utils/api.js';
@@ -87,9 +87,9 @@ async function runScanCycle() {
     return;
   }
 
-  const [groups, keywords] = await Promise.all([getGroups(), getKeywords()]);
+  const [groups, keywords] = await Promise.all([getSelectedGroups(), getKeywords()]);
   if (!groups.length) {
-    console.log('[LeadSnap] No groups configured — skipping scan');
+    console.log('[LeadSnap] No groups selected — skipping scan');
     return;
   }
   if (!keywords.length) {

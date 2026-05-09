@@ -7,6 +7,7 @@ const SYNC_KEYS = {
   USER_EMAIL:           'user_email',
   KEYWORDS:             'keywords',
   GROUPS:               'groups',
+  SELECTED_GROUPS:      'selected_groups',
   SCANNING_ENABLED:     'scanning_enabled',
   BUSINESS_DESCRIPTION: 'business_description',
 };
@@ -48,6 +49,11 @@ export const setKeywords           = (v) => chrome.storage.sync.set({ [SYNC_KEYS
 
 export const getGroups             = () => syncGet(SYNC_KEYS.GROUPS, []);
 export const setGroups             = (v) => chrome.storage.sync.set({ [SYNC_KEYS.GROUPS]: v });
+
+// Selected groups: array of { url, name } the user has chosen to monitor.
+// Stored in sync so selections carry across devices.
+export const getSelectedGroups     = () => syncGet(SYNC_KEYS.SELECTED_GROUPS, []);
+export const setSelectedGroups     = (v) => new Promise((r) => chrome.storage.sync.set({ [SYNC_KEYS.SELECTED_GROUPS]: v }, r));
 
 export const getScanningEnabled    = () => syncGet(SYNC_KEYS.SCANNING_ENABLED, true);
 export const setScanningEnabled    = (v) => chrome.storage.sync.set({ [SYNC_KEYS.SCANNING_ENABLED]: v });

@@ -3,9 +3,6 @@ import {
   getKeywords as apiGetKeywords,
   addKeyword  as apiAddKeyword,
   deleteKeyword as apiDeleteKeyword,
-  getGroups   as apiGetGroups,
-  addGroup    as apiAddGroup,
-  deleteGroup as apiDeleteGroup,
 } from '../utils/api.js';
 import {
   getAuthToken,
@@ -13,11 +10,12 @@ import {
   setScanningEnabled,
   getSubscriptionStatus,
   getLastScanAt,
+  getSelectedGroups,
+  setSelectedGroups,
 } from '../utils/storage.js';
 
-// Update this to your Vercel frontend URL once deployed in Step 18
-const DASHBOARD_URL = 'https://leadsnap.vercel.app';
-const API_URL = 'https://leadsnap-backend-production.up.railway.app';
+const DASHBOARD_URL = 'https://leadsnap-weld.vercel.app';
+const MAX_GROUPS    = 25;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -36,16 +34,19 @@ const keywordInput = document.getElementById('keyword-input');
 const keywordList  = document.getElementById('keyword-list');
 const keywordError = document.getElementById('keyword-error');
 
-const groupInput = document.getElementById('group-input');
-const groupList  = document.getElementById('group-list');
-const groupError = document.getElementById('group-error');
-const trialNote  = document.getElementById('trial-note');
+const groupsCounter = document.getElementById('groups-counter');
+const groupsMsg     = document.getElementById('groups-msg');
+const groupsList    = document.getElementById('groups-list');
+const groupsSaveRow = document.getElementById('groups-save-row');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let token = null;
+let token    = null;
 let keywords = [];
-let groups = [];
+
+// Groups state — lives only in popup memory; persisted on Save
+let allDiscoveredGroups = []; // [{ url, name }] — full discovered + saved list
+let selectedGroupUrls   = new Set(); // urls of currently checked groups
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -54,17 +55,7 @@ async function init() {
   token = await getAuthToken();
   if (!token) { showView('logged-out'); return; }
   showView('logged-in');
-  await Promise.all([loadStatus(), loadKeywords(), loadGroups()]);
-}
-
-// ── Storage sync helpers ──────────────────────────────────────────────────────
-
-function syncKeywordsToStorage() {
-  return chrome.storage.sync.set({ keywords: keywords.map((k) => k.keyword) });
-}
-
-function syncGroupsToStorage() {
-  return chrome.storage.sync.set({ groups: groups.map((g) => g.facebook_group_url) });
+  await Promise.all([loadStatus(), loadKeywords(), initGroupsTab()]);
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -89,15 +80,16 @@ document.querySelectorAll('.tab').forEach((btn) => {
 // ── Status tab ────────────────────────────────────────────────────────────────
 
 async function loadStatus() {
-  const [scanningEnabled, lastScanAt, { status: subStatus }] = await Promise.all([
+  const [scanningEnabled, lastScanAt, { status: subStatus }, savedGroups] = await Promise.all([
     new Promise((r) => chrome.storage.sync.get('scanning_enabled', (d) => r(d.scanning_enabled !== false))),
     getLastScanAt(),
     getSubscriptionStatus(),
+    getSelectedGroups(),
   ]);
 
   toggleScanning.checked   = scanningEnabled;
   statKeywords.textContent = keywords.length || '—';
-  statGroups.textContent   = groups.length   || '—';
+  statGroups.textContent   = savedGroups.length || '—';
   statLastScan.textContent = formatLastScan(lastScanAt);
 
   if (subStatus === 'inactive') {
@@ -117,6 +109,10 @@ function formatLastScan(ts) {
 }
 
 // ── Keywords tab ──────────────────────────────────────────────────────────────
+
+function syncKeywordsToStorage() {
+  return chrome.storage.sync.set({ keywords: keywords.map((k) => k.keyword) });
+}
 
 async function loadKeywords() {
   try {
@@ -181,85 +177,146 @@ async function removeKeyword(id) {
 
 // ── Groups tab ────────────────────────────────────────────────────────────────
 
-async function loadGroups() {
-  try {
-    groups = await apiGetGroups(token);
-    await syncGroupsToStorage();
-  } catch {
-    const cached = await new Promise((r) => chrome.storage.sync.get('groups', (d) => r(d.groups || [])));
-    groups = cached.map((url) => ({ facebook_group_url: url }));
-  }
-  renderGroups();
-  statGroups.textContent = groups.length;
+async function initGroupsTab() {
+  // Seed the list with whatever was previously saved
+  const saved = await getSelectedGroups();
+  allDiscoveredGroups = [...saved];
+  selectedGroupUrls   = new Set(saved.map((g) => g.url));
+  statGroups.textContent = saved.length || '—';
+  renderGroupsList();
 
-  const { status: subStatus } = await getSubscriptionStatus();
-  if (subStatus === 'trial') trialNote.classList.remove('hidden');
+  // Auto-scan silently — enrich the list if a Facebook tab is open
+  await scanForGroups({ silent: true });
 }
 
-function renderGroups() {
-  if (!groups.length) {
-    groupList.innerHTML = '<li class="empty-msg">No groups yet. Add one above.</li>';
-    return;
-  }
-  groupList.innerHTML = groups.map((g) => `
-    <li>
-      <div class="item-text">
-        <div>${escHtml(g.group_name || 'Unnamed group')}</div>
-        <div class="item-sub">${escHtml(shortUrl(g.facebook_group_url))}</div>
-      </div>
-      ${g.id ? `<button class="btn-remove" data-id="${g.id}" title="Remove">×</button>` : ''}
-    </li>
-  `).join('');
-  groupList.querySelectorAll('.btn-remove').forEach((btn) =>
-    btn.addEventListener('click', () => removeGroup(btn.dataset.id))
-  );
-}
-
-async function addGroup() {
-  const url = groupInput.value.trim();
-  if (!url) return;
-
-  setInlineError(groupError, null);
-  const btn = document.getElementById('btn-add-group');
+async function scanForGroups({ silent = false } = {}) {
+  const btn = document.getElementById('btn-scan-groups');
   btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  if (!silent) setGroupsMsg('');
+
   try {
-    const created = await apiAddGroup(token, url);
-    groups.push(created);
-    groupInput.value = '';
-    renderGroups();
-    statGroups.textContent = groups.length;
-    await syncGroupsToStorage();
-  } catch (err) {
-    const msg = err.code === 'TRIAL_LIMIT'
-      ? 'Trial plan is limited to 5 groups. Upgrade to add more.'
-      : err.message;
-    setInlineError(groupError, msg);
+    const tabs = await chrome.tabs.query({ url: 'https://www.facebook.com/*' });
+
+    if (!tabs.length) {
+      setGroupsMsg(
+        silent
+          ? 'Open Facebook in Chrome to auto-discover your groups.'
+          : 'No Facebook tab found. Open facebook.com/groups/feed and try again.'
+      );
+      return;
+    }
+
+    // Prefer a groups page; any FB tab will work because the sidebar is universal
+    const tab = tabs.find((t) => t.url.includes('/groups')) || tabs[0];
+
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(tab.id, { type: 'LEADSNAP_GET_GROUPS' });
+    } catch {
+      setGroupsMsg('Could not reach the Facebook tab. Reload the page and try again.');
+      return;
+    }
+
+    const fetched = response?.groups ?? [];
+    if (!fetched.length) {
+      if (!silent) setGroupsMsg('No groups found on that page. Try opening facebook.com/groups/feed.');
+      return;
+    }
+
+    // Merge — preserve existing entries, append newly discovered ones
+    const knownUrls = new Set(allDiscoveredGroups.map((g) => g.url));
+    let added = 0;
+    for (const g of fetched) {
+      if (!knownUrls.has(g.url)) {
+        allDiscoveredGroups.push(g);
+        knownUrls.add(g.url);
+        added++;
+      }
+    }
+
+    setGroupsMsg(
+      `${allDiscoveredGroups.length} group${allDiscoveredGroups.length !== 1 ? 's' : ''} found` +
+      (added ? ` · ${added} new` : '')
+    );
+    renderGroupsList();
   } finally {
+    btn.textContent = 'Scan Facebook';
     btn.disabled = false;
   }
 }
 
-async function removeGroup(id) {
-  try {
-    await apiDeleteGroup(token, id);
-    groups = groups.filter((g) => g.id !== id);
-    renderGroups();
-    statGroups.textContent = groups.length;
-    await syncGroupsToStorage();
-  } catch (err) {
-    setInlineError(groupError, err.message);
+function renderGroupsList() {
+  // Update counter
+  groupsCounter.textContent = `${selectedGroupUrls.size}/${MAX_GROUPS} selected`;
+
+  // Show/hide Save button
+  groupsSaveRow.classList.toggle('hidden', allDiscoveredGroups.length === 0);
+
+  if (!allDiscoveredGroups.length) {
+    groupsList.innerHTML = '<div class="group-item"><div class="group-item-text"><div class="group-item-name" style="color:#9ca3af">No groups discovered yet — click Scan Facebook above.</div></div></div>';
+    return;
   }
+
+  const atMax = selectedGroupUrls.size >= MAX_GROUPS;
+
+  groupsList.innerHTML = allDiscoveredGroups.map((g, i) => {
+    const checked  = selectedGroupUrls.has(g.url);
+    const dimmed   = !checked && atMax;
+    return `
+      <label class="group-item${dimmed ? ' dimmed' : ''}">
+        <input type="checkbox" class="group-checkbox" data-idx="${i}"
+          ${checked ? 'checked' : ''} ${dimmed ? 'disabled' : ''} />
+        <div class="group-item-text">
+          <div class="group-item-name">${escHtml(g.name)}</div>
+          <div class="group-item-url">${escHtml(shortUrl(g.url))}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
+
+  groupsList.querySelectorAll('.group-checkbox').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const g = allDiscoveredGroups[parseInt(cb.dataset.idx, 10)];
+      if (cb.checked) {
+        if (selectedGroupUrls.size >= MAX_GROUPS) { cb.checked = false; return; }
+        selectedGroupUrls.add(g.url);
+      } else {
+        selectedGroupUrls.delete(g.url);
+      }
+      renderGroupsList(); // re-render to update counter + disabled states
+    });
+  });
+}
+
+async function saveGroups() {
+  const btn = document.getElementById('btn-save-groups');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const toSave = allDiscoveredGroups.filter((g) => selectedGroupUrls.has(g.url));
+    await setSelectedGroups(toSave);
+    statGroups.textContent = toSave.length || '—';
+    setGroupsMsg('Saved!');
+    setTimeout(() => setGroupsMsg(''), 2000);
+  } catch (err) {
+    setGroupsMsg('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save selections';
+  }
+}
+
+function setGroupsMsg(msg, isError = false) {
+  groupsMsg.textContent = msg;
+  groupsMsg.classList.toggle('error', isError);
 }
 
 // ── Shared UI helpers ─────────────────────────────────────────────────────────
 
 function setInlineError(el, msg) {
-  if (msg) {
-    el.textContent = msg;
-    el.classList.remove('hidden');
-  } else {
-    el.classList.add('hidden');
-  }
+  if (msg) { el.textContent = msg; el.classList.remove('hidden'); }
+  else      { el.classList.add('hidden'); }
 }
 
 function escHtml(str) {
@@ -278,16 +335,13 @@ function shortUrl(url) {
 document.getElementById('btn-sign-in').addEventListener('click', () =>
   chrome.tabs.create({ url: chrome.runtime.getURL('auth/auth.html') })
 );
-
 document.getElementById('btn-view-leads').addEventListener('click', () =>
   chrome.tabs.create({ url: DASHBOARD_URL })
 );
-
 document.getElementById('btn-logout').addEventListener('click', async () => {
   await clearSession();
   showView('logged-out');
 });
-
 document.getElementById('btn-upgrade').addEventListener('click', (e) => {
   e.preventDefault();
   chrome.tabs.create({ url: `${DASHBOARD_URL}/billing` });
@@ -296,8 +350,8 @@ document.getElementById('btn-upgrade').addEventListener('click', (e) => {
 document.getElementById('btn-add-keyword').addEventListener('click', addKeyword);
 keywordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addKeyword(); });
 
-document.getElementById('btn-add-group').addEventListener('click', addGroup);
-groupInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addGroup(); });
+document.getElementById('btn-scan-groups').addEventListener('click', () => scanForGroups());
+document.getElementById('btn-save-groups').addEventListener('click', saveGroups);
 
 toggleScanning.addEventListener('change', (e) => {
   setScanningEnabled(e.target.checked);

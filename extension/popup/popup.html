@@ -91,16 +91,14 @@
 
       <!-- ── Groups tab ── -->
       <div id="tab-groups" class="tab-panel hidden">
-        <div class="add-form">
-          <input type="text" id="group-input" placeholder="https://facebook.com/groups/…" />
-          <button id="btn-add-group" class="btn btn-primary btn-sm">Add</button>
+        <div class="groups-toolbar">
+          <span id="groups-counter" class="groups-counter">0/25 selected</span>
+          <button id="btn-scan-groups" class="btn btn-sm btn-secondary">Scan Facebook</button>
         </div>
-        <div id="group-error" class="inline-error hidden"></div>
-        <ul id="group-list" class="item-list">
-          <li class="empty-msg">Loading…</li>
-        </ul>
-        <div id="trial-note" class="banner banner-info hidden">
-          Trial plan: up to 5 groups.
+        <div id="groups-msg" class="groups-msg"></div>
+        <div id="groups-list" class="checkbox-list"></div>
+        <div id="groups-save-row" class="save-row hidden">
+          <button id="btn-save-groups" class="btn btn-primary btn-full">Save selections</button>
         </div>
       </div>
 

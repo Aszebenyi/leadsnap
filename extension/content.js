@@ -13,6 +13,12 @@ const MIN_POST_TEXT_LENGTH = 20;
 // ── Message listener ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  // ── Discover groups from the current page's DOM ───────────────────────────
+  if (message.type === 'LEADSNAP_GET_GROUPS') {
+    sendResponse({ groups: extractGroupsFromDOM() });
+    return; // synchronous
+  }
+
   if (message.type !== 'LEADSNAP_SCAN') return;
 
   const { keywords, groups } = message;
@@ -59,7 +65,8 @@ function findCurrentGroup(groups) {
   if (!groups || !groups.length) return null;
   const current = normalizeGroupUrl(window.location.href);
   return groups.find((g) => {
-    const url = typeof g === 'string' ? g : g.facebook_group_url;
+    // Support both { url } (new format) and { facebook_group_url } (legacy)
+    const url = typeof g === 'string' ? g : (g.url || g.facebook_group_url);
     return normalizeGroupUrl(url) === current;
   }) ?? null;
 }
@@ -70,9 +77,50 @@ function isMonitoredGroup(groups) {
 
 function getGroupName(groups) {
   const match = findCurrentGroup(groups);
-  if (match?.group_name) return match.group_name;
+  // Support both { name } (new format) and { group_name } (legacy)
+  if (match?.name || match?.group_name) return match.name || match.group_name;
   // Fall back to the page <title> which usually contains the group name
   return document.title.replace(/ \| Facebook$/, '').trim() || 'Unknown Group';
+}
+
+// ── Group discovery ───────────────────────────────────────────────────────────
+// Called when the popup sends LEADSNAP_GET_GROUPS. Scrapes all group links
+// visible on the current Facebook page (sidebar, feed, etc.).
+
+const EXCLUDED_PATHS = /^\/groups\/(feed|discover|create|joins|category|search|notifications|requests|invite)/;
+
+function extractGroupsFromDOM() {
+  const seen = new Set();
+  const groups = [];
+
+  document.querySelectorAll('a[href*="/groups/"]').forEach((link) => {
+    let parsed;
+    try { parsed = new URL(link.href); } catch { return; }
+
+    if (parsed.hostname !== 'www.facebook.com' && parsed.hostname !== 'facebook.com') return;
+
+    // Only want /groups/<id-or-slug> — not /groups/<id>/posts/<id> etc.
+    const path = parsed.pathname.replace(/\/$/, '');
+    if (!/^\/groups\/[^/]+$/.test(path)) return;
+    if (EXCLUDED_PATHS.test(path)) return;
+
+    const url = `https://www.facebook.com${path}`;
+    if (seen.has(url)) return;
+    seen.add(url);
+
+    // Best-effort name extraction: aria-label → first span text → link text
+    const name = (
+      link.getAttribute('aria-label') ||
+      link.querySelector('span')?.innerText ||
+      link.innerText
+    ).trim().split('\n')[0].trim();
+
+    if (!name || name.length < 2) return;
+
+    groups.push({ url, name });
+  });
+
+  return groups;
 }
 
 // ── Main scrape + submit flow ─────────────────────────────────────────────────
