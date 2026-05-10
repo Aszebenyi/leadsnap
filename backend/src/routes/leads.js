@@ -4,6 +4,7 @@ import { requireSubscription } from '../middleware/subscription.js';
 import supabase from '../lib/supabase.js';
 import { scoreLead, generateReply } from '../services/claude.js';
 import { sendLeadAlert } from '../services/twilio.js';
+import { sendLeadAlertEmail } from '../services/sendgrid.js';
 
 const router = Router();
 
@@ -87,6 +88,7 @@ router.post('/ingest', requireAuth, requireSubscription, async (req, res, next) 
         group_url:        group_url        ?? null,
         matched_keywords: matched_keywords ?? [],
         score:            scoreResult?.score   ?? null,
+        urgent:           scoreResult?.urgent  ?? false,
         ai_reply:         replyText             ?? null,
         status:           'new',
         notified_at:      null,
@@ -96,37 +98,59 @@ router.post('/ingest', requireAuth, requireSubscription, async (req, res, next) 
 
     if (insertError) throw insertError;
 
-    // ── Send SMS alert ───────────────────────────────────────────────────────
+    // ── Send alert (SMS primary, email fallback) ─────────────────────────────
     const phoneNumber = profile?.phone_number;
-    if (phoneNumber && !skip_sms) {
-      const capped = await isDailySmsCapped(req.user.id);
-      if (capped) {
-        console.log(`[LeadSnap] Daily SMS cap reached for user ${req.user.id} — skipping alert`);
-      } else {
-        try {
-          const { sid } = await sendLeadAlert({
-            to:        phoneNumber,
-            groupName: group_name,
-            postText:  post_text,
-            postUrl:   post_url,
-            score:     scoreResult?.score ?? null,
-            aiReply:   replyText,
-          });
+    const alertPayload = {
+      groupName: group_name,
+      postText:  post_text,
+      postUrl:   post_url,
+      score:     scoreResult?.score ?? null,
+      aiReply:   replyText,
+    };
 
-          // Record the alert and update notified_at in parallel
+    if (!skip_sms) {
+      let smsSent = false;
+
+      if (phoneNumber) {
+        const capped = await isDailySmsCapped(req.user.id);
+        if (capped) {
+          console.log(`[LeadSnap] Daily SMS cap reached for user ${req.user.id} — skipping SMS`);
+        } else {
+          try {
+            const { sid } = await sendLeadAlert({ to: phoneNumber, ...alertPayload });
+            smsSent = true;
+            await Promise.all([
+              supabase.from('alerts').insert({
+                user_id:    req.user.id,
+                lead_id:    lead.id,
+                channel:    'sms',
+                delivered:  false,
+                twilio_sid: sid,
+              }),
+              supabase.from('leads').update({ notified_at: new Date().toISOString() }).eq('id', lead.id),
+            ]);
+          } catch (smsErr) {
+            console.error('[LeadSnap] SMS send failed — trying email fallback:', smsErr.message);
+          }
+        }
+      }
+
+      // Email fallback: no phone set, SMS failed, or daily cap reached
+      if (!smsSent && req.user.email && process.env.SENDGRID_API_KEY) {
+        try {
+          await sendLeadAlertEmail({ to: req.user.email, ...alertPayload });
           await Promise.all([
             supabase.from('alerts').insert({
-              user_id:    req.user.id,
-              lead_id:    lead.id,
-              channel:    'sms',
-              delivered:  false,
-              twilio_sid: sid,
+              user_id:   req.user.id,
+              lead_id:   lead.id,
+              channel:   'email',
+              delivered: false,
             }),
             supabase.from('leads').update({ notified_at: new Date().toISOString() }).eq('id', lead.id),
           ]);
-        } catch (smsErr) {
-          // Non-fatal — lead is already saved; log and continue
-          console.error('[LeadSnap] SMS send failed:', smsErr.message);
+          console.log(`[LeadSnap] Email alert sent to ${req.user.email}`);
+        } catch (emailErr) {
+          console.error('[LeadSnap] Email fallback failed:', emailErr.message);
         }
       }
     }
@@ -145,6 +169,8 @@ router.get('/', requireAuth, async (req, res, next) => {
     const offset = Math.max(parseInt(req.query.offset ?? '0',  10), 0);
     const status = req.query.status;
 
+    const { q, from, to } = req.query;
+
     let query = supabase
       .from('leads')
       .select('*', { count: 'exact' })
@@ -158,11 +184,82 @@ router.get('/', requireAuth, async (req, res, next) => {
       }
       query = query.eq('status', status);
     }
+    if (q) {
+      // Full-text search across post text, author, and group name
+      query = query.or(`post_text.ilike.%${q}%,author_name.ilike.%${q}%,group_name.ilike.%${q}%`);
+    }
+    if (from) query = query.gte('created_at', from);
+    if (to)   query = query.lte('created_at', to);
 
     const { data, count, error } = await query;
     if (error) throw error;
 
     res.json({ leads: data, total: count, limit, offset });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/leads/stats ──────────────────────────────────────────────────────
+
+router.get('/stats', requireAuth, async (req, res, next) => {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [{ data: weekLeads }, { data: allLeads }] = await Promise.all([
+      supabase
+        .from('leads')
+        .select('score, status')
+        .eq('user_id', req.user.id)
+        .gte('created_at', weekAgo),
+      supabase
+        .from('leads')
+        .select('score, status')
+        .eq('user_id', req.user.id),
+    ]);
+
+    const thisWeek  = weekLeads?.length ?? 0;
+    const wins      = allLeads?.filter((l) => l.status === 'won').length ?? 0;
+    const scored    = allLeads?.filter((l) => l.score != null) ?? [];
+    const avgScore  = scored.length
+      ? Math.round(scored.reduce((sum, l) => sum + l.score, 0) / scored.length * 10) / 10
+      : null;
+
+    res.json({ this_week: thisWeek, wins, avg_score: avgScore });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/leads/export ─────────────────────────────────────────────────────
+
+router.get('/export', requireAuth, async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const cols = ['id', 'post_text', 'post_url', 'author_name', 'group_name', 'group_url', 'score', 'ai_reply', 'status', 'matched_keywords', 'detected_at', 'notified_at', 'created_at'];
+
+    function escapeCSV(val) {
+      if (val == null) return '';
+      const str = Array.isArray(val) ? val.join('; ') : String(val);
+      if (/[,"\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+      return str;
+    }
+
+    const rows = [cols.join(',')];
+    for (const lead of data) {
+      rows.push(cols.map((c) => escapeCSV(lead[c])).join(','));
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="leadsnap-leads.csv"');
+    res.send(rows.join('\n'));
   } catch (err) {
     next(err);
   }

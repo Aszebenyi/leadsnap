@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProfile, updateProfile, getKeywords, addKeyword, deleteKeyword, getGroups, addGroup, deleteGroup } from '../lib/api';
+import { getProfile, updateProfile, getKeywords, addKeyword, deleteKeyword, getGroups, addGroup, deleteGroup, deleteAccount, exportLeads } from '../lib/api';
+import supabase from '../lib/supabase';
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saveMsg, setSaveMsg] = useState('');
   const [error, setError]     = useState('');
+
+  // Data export
+  const [exporting, setExporting] = useState(false);
+
+  // Account deletion
+  const [deleteStep, setDeleteStep]   = useState(0); // 0 = hidden, 1 = confirm prompt, 2 = deleting
+  const [deleteError, setDeleteError] = useState('');
 
   // Profile
   const [businessName, setBusinessName]           = useState('');
@@ -116,6 +126,39 @@ export default function Settings() {
       setGroups((g) => g.filter((x) => x.id !== id));
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  // ── CSV export ───────────────────────────────────────────────────────────────
+  async function handleExport() {
+    setExporting(true);
+    setError('');
+    try {
+      const blob = await exportLeads();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'leadsnap-leads.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // ── Account deletion ──────────────────────────────────────────────────────────
+  async function handleDeleteAccount() {
+    setDeleteStep(2);
+    setDeleteError('');
+    try {
+      await deleteAccount();
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (err) {
+      setDeleteError(err.message);
+      setDeleteStep(1);
     }
   }
 
@@ -249,6 +292,57 @@ export default function Settings() {
             </ul>
           )}
         </section>
+        {/* Data export */}
+        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-1">Export your data</h2>
+          <p className="text-sm text-gray-500 mb-4">Download all your leads as a CSV file.</p>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]"
+          >
+            {exporting ? 'Preparing…' : 'Download leads CSV'}
+          </button>
+        </section>
+
+        {/* Danger zone */}
+        <section className="bg-white rounded-xl border border-red-200 shadow-sm p-6">
+          <h2 className="text-base font-semibold text-red-700 mb-1">Danger zone</h2>
+          <p className="text-sm text-gray-500 mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>
+
+          {deleteStep === 0 && (
+            <button
+              onClick={() => setDeleteStep(1)}
+              className="border border-red-300 text-red-600 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors min-h-[44px]"
+            >
+              Delete account
+            </button>
+          )}
+
+          {deleteStep >= 1 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium text-red-800">Are you sure? This will permanently delete your account, all leads, keywords, and groups.</p>
+              {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteStep === 2}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors min-h-[44px]"
+                >
+                  {deleteStep === 2 ? 'Deleting…' : 'Yes, delete my account'}
+                </button>
+                <button
+                  onClick={() => { setDeleteStep(0); setDeleteError(''); }}
+                  disabled={deleteStep === 2}
+                  className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors min-h-[44px]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
       </div>
     </div>
   );

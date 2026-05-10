@@ -89,6 +89,10 @@ export function updateLeadStatus(token, id, status) {
   return request(`/api/leads/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }, token);
 }
 
+export function heartbeat(token) {
+  return request('/api/profile/heartbeat', { method: 'POST' }, token);
+}
+
 // ── Billing ──────────────────────────────────────────────────────────────────
 
 export function createCheckout(token) {

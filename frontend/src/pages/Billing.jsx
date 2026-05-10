@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
-import { createCheckoutSession, createPortalSession } from '../lib/api';
-import supabase from '../lib/supabase';
+import { getBillingStatus, createCheckoutSession, createPortalSession } from '../lib/api';
 
 export default function Billing() {
   const [subscription, setSubscription] = useState(null);
@@ -10,26 +9,10 @@ export default function Billing() {
   const [error, setError]               = useState('');
 
   useEffect(() => {
-    async function loadSubscription() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        const { data, error: dbErr } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-
-        if (dbErr) throw dbErr;
-        setSubscription(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadSubscription();
+    getBillingStatus()
+      .then(setSubscription)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleSubscribe() {

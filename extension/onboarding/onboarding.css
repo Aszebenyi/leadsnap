@@ -15,26 +15,47 @@ body {
 .card {
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 16px;
   width: 100%;
   max-width: 520px;
-  padding: 32px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  padding: 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  overflow: hidden;
+}
+
+/* Orange accent bar at top of card */
+.card-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #f97316, #ea6c0b);
 }
 
 /* ── Header ── */
 .logo {
-  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 20px;
   font-weight: 700;
-  color: #f97316;
+  color: #111827;
   text-align: center;
-  margin-bottom: 8px;
+  padding: 28px 32px 4px;
+  letter-spacing: -0.02em;
+}
+.logo-mark {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #f97316, #ea6c0b);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(249,115,22,0.35);
 }
 .welcome {
   text-align: center;
   font-size: 13px;
   color: #6b7280;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
+  padding: 0 32px;
 }
 
 /* ── Step indicators ── */
@@ -43,41 +64,63 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0;
-  margin-bottom: 28px;
+  padding: 0 32px;
+  margin-bottom: 4px;
 }
 .step-dot {
-  width: 28px; height: 28px;
+  width: 30px; height: 30px;
   border-radius: 50%;
-  background: #e5e7eb;
+  background: #f3f4f6;
   color: #9ca3af;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.25s, color 0.25s, box-shadow 0.25s;
   flex-shrink: 0;
+  border: 2px solid #e5e7eb;
 }
-.step-dot.active   { background: #f97316; color: #fff; }
-.step-dot.complete { background: #22c55e; color: #fff; }
+.step-dot.active {
+  background: #f97316; color: #fff;
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.18);
+}
+.step-dot.complete {
+  background: #22c55e; color: #fff;
+  border-color: #22c55e;
+}
 .step-line {
   flex: 1; height: 2px;
   background: #e5e7eb;
   max-width: 60px;
+  transition: background 0.25s;
+}
+.step-line.complete { background: #22c55e; }
+.step-progress-label {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
 }
 
 /* ── Step panels ── */
-.step-panel { display: none; }
+.step-panel { display: none; padding: 0 32px 28px; }
 .step-panel.visible { display: block; }
 
 .step-title {
   font-size: 17px;
   font-weight: 700;
   margin-bottom: 4px;
+  color: #111827;
+  letter-spacing: -0.01em;
 }
 .step-desc {
   font-size: 13px;
   color: #6b7280;
-  margin-bottom: 16px;
-  line-height: 1.5;
+  margin-bottom: 18px;
+  line-height: 1.55;
 }
 
 /* ── Groups list (reuse popup styles) ── */

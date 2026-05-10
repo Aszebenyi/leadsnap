@@ -18,6 +18,17 @@ async function getSubscription(userId) {
   return data;
 }
 
+// ── GET /api/billing/status ───────────────────────────────────────────────────
+
+router.get('/status', requireAuth, async (req, res, next) => {
+  try {
+    const sub = await getSubscription(req.user.id);
+    res.json(sub ?? null);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── POST /api/billing/checkout ────────────────────────────────────────────────
 // Creates a Stripe Checkout session and returns the redirect URL.
 

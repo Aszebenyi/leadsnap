@@ -886,6 +886,14 @@
   .ls-feature-pills { margin-top: 32px; gap: 8px; }
   .ls-feature-pill { font-size: 13px; padding: 8px 12px; }
 
-  /* Hero h1 tighter on small phones */
-  .ls-hero h1 { font-size: clamp(28px, 8vw, 40px); letter-spacing: -0.03em; }
+  /* Hero h1 — tighter on small phones, constrained to viewport */
+  .ls-hero h1 {
+    font-size: clamp(26px, 7.5vw, 40px);
+    letter-spacing: -0.03em;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+  .ls-hero .lede { font-size: 16px; }
+  .ls-cta-row .ls-btn.primary { font-size: 15px; padding: 14px 22px; width: 100%; justify-content: center; }
 }

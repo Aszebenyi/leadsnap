@@ -140,6 +140,30 @@ router.post('/extract-website', requireAuth, async (req, res, next) => {
   }
 });
 
+// POST /api/profile/heartbeat — called by extension after each scan cycle
+router.post('/heartbeat', requireAuth, async (req, res, next) => {
+  try {
+    await supabase
+      .from('profiles')
+      .update({ last_scan_at: new Date().toISOString() })
+      .eq('id', req.user.id);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/profile — permanently deletes the user's account and all associated data
+router.delete('/', requireAuth, async (req, res, next) => {
+  try {
+    const { error } = await supabase.auth.admin.deleteUser(req.user.id);
+    if (error) throw error;
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/profile/suggest-description
 // Generates a 2-sentence ideal-lead description using Claude.
 // Body: { service_description?: string, keywords?: string[] }

@@ -30,9 +30,13 @@ async function request(path, options = {}) {
 
 export function getLeads(params = {}) {
   const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
   ).toString();
   return request(`/api/leads${qs ? `?${qs}` : ''}`);
+}
+
+export function getLeadStats() {
+  return request('/api/leads/stats');
 }
 
 export function updateLeadStatus(id, status) {
@@ -89,7 +93,31 @@ export function updateProfile(data) {
   });
 }
 
+export function deleteAccount() {
+  return request('/api/profile', { method: 'DELETE' });
+}
+
+export async function exportLeads() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const res = await fetch(`${API_URL}/api/leads/export`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Export failed: ${res.status}`);
+  }
+
+  return res.blob();
+}
+
 // ── Billing ───────────────────────────────────────────────────────────────────
+
+export function getBillingStatus() {
+  return request('/api/billing/status');
+}
 
 export function createCheckoutSession(success_url, cancel_url) {
   return request('/api/billing/checkout', {

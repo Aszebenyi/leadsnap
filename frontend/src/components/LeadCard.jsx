@@ -60,6 +60,12 @@ export default function LeadCard({ lead, onStatusChange }) {
       {/* Header row */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {/* Urgent badge */}
+          {lead.urgent && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200">
+              ⚡ Urgent
+            </span>
+          )}
           {/* Score badge */}
           {lead.score != null && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${SCORE_COLOR(lead.score)}`}>
@@ -140,7 +146,7 @@ export default function LeadCard({ lead, onStatusChange }) {
           </a>
         )}
         {lead.score != null && lead.score >= 8 && (
-          <span className="text-xs text-orange-500 font-medium">🔥 High intent</span>
+          <span className="text-xs text-orange-500 font-medium">High intent</span>
         )}
       </div>
     </div>

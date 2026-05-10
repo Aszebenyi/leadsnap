@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import LeadCard from '../components/LeadCard';
 import { useLeads } from '../hooks/useLeads';
+import { getProfile, getLeads, getLeadStats, updateLeadStatus as apiUpdateLeadStatus } from '../lib/api';
 
 const STATUS_TABS = [
   { label: 'All',     value: undefined  },
@@ -11,6 +12,15 @@ const STATUS_TABS = [
   { label: 'Won',     value: 'won'      },
   { label: 'Lost',    value: 'lost'     },
 ];
+
+const EMPTY_MESSAGES = {
+  undefined: { icon: '📭', text: 'No leads yet. Make sure your Chrome extension is installed and Facebook groups are configured.' },
+  new:       { icon: '✅', text: 'No new leads — you\'re all caught up!' },
+  seen:      { icon: '👀', text: 'No leads marked as seen yet.' },
+  replied:   { icon: '💬', text: 'No leads you\'ve replied to yet.' },
+  won:       { icon: '🏆', text: 'No won leads yet — keep replying!' },
+  lost:      { icon: '😞', text: 'No lost leads. Good work!' },
+};
 
 // ── Skeleton card ─────────────────────────────────────────────────────────────
 
@@ -51,9 +61,87 @@ function SkeletonCard() {
 
 export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState(undefined);
-  const { leads, total, loading, loadingMore, hasMore, error, loadMore, updateLeadStatus } = useLeads(
-    statusFilter ? { status: statusFilter } : {}
+  const [search, setSearch]             = useState('');
+  const [dateRange, setDateRange]       = useState('all');
+  const [lastScanAt, setLastScanAt]     = useState(undefined);
+  const [newCount, setNewCount]         = useState(null);
+  const [stats, setStats]               = useState(null);
+  const [markingAllSeen, setMarkingAllSeen] = useState(false);
+
+  function getDateFilters(range) {
+    const now = new Date();
+    if (range === 'today') {
+      const start = new Date(now); start.setHours(0, 0, 0, 0);
+      return { from: start.toISOString() };
+    }
+    if (range === 'week') {
+      const start = new Date(now); start.setDate(now.getDate() - 7);
+      return { from: start.toISOString() };
+    }
+    if (range === 'month') {
+      const start = new Date(now); start.setDate(now.getDate() - 30);
+      return { from: start.toISOString() };
+    }
+    return {};
+  }
+
+  const leadsFilters = {
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(search.trim() ? { q: search.trim() } : {}),
+    ...getDateFilters(dateRange),
+  };
+
+  const { leads, total, loading, loadingMore, hasMore, error, loadMore, updateLeadStatus } = useLeads(leadsFilters);
+
+  useEffect(() => {
+    getProfile()
+      .then((p) => setLastScanAt(p.last_scan_at ?? null))
+      .catch(() => setLastScanAt(null));
+    getLeads({ status: 'new', limit: 1 })
+      .then((d) => setNewCount(d.total ?? 0))
+      .catch(() => {});
+    getLeadStats()
+      .then(setStats)
+      .catch(() => {});
+  }, []);
+
+  // Infinite scroll sentinel
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && hasMore && !loadingMore) loadMore(); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadMore]);
+
+  const extensionDisconnected = lastScanAt !== undefined && (
+    lastScanAt === null ||
+    Date.now() - new Date(lastScanAt).getTime() > 24 * 60 * 60 * 1000
   );
+
+  const handleStatusChange = useCallback(async (id, status) => {
+    const updated = await updateLeadStatus(id, status);
+    // Keep new-lead badge in sync
+    if (status !== 'new') setNewCount((c) => Math.max(0, (c ?? 1) - 1));
+    return updated;
+  }, [updateLeadStatus]);
+
+  async function handleMarkAllSeen() {
+    if (!leads.length || statusFilter !== 'new') return;
+    setMarkingAllSeen(true);
+    try {
+      await Promise.all(leads.map((l) => apiUpdateLeadStatus(l.id, 'seen')));
+      setNewCount(0);
+      // Reload the current filter
+      setStatusFilter((f) => f); // triggers useLeads re-fetch via filtersKey change — noop trick
+      window.location.reload(); // simplest: just reload to get fresh state
+    } catch {
+      setMarkingAllSeen(false);
+    }
+  }
 
   function handleFilterChange(value) {
     setStatusFilter(value);
@@ -74,6 +162,66 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Search + date filter */}
+        <div className="flex flex-col sm:flex-row gap-2 mb-5">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search leads…"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+            )}
+          </div>
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+            className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-700"
+          >
+            <option value="all">All time</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="month">Last 30 days</option>
+          </select>
+        </div>
+
+        {/* Stats strip */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          {[
+            { label: 'Leads this week', val: stats?.this_week, suffix: '' },
+            { label: 'Avg. score',      val: stats?.avg_score,  suffix: '/10' },
+            { label: 'Total wins',      val: stats?.wins,        suffix: '' },
+          ].map(({ label, val, suffix }) => (
+            <div key={label} className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+              <p className="text-xs text-gray-500 mb-1">{label}</p>
+              <p className="text-2xl font-bold text-gray-900 leading-none">
+                {stats === null
+                  ? <span className="inline-block h-6 w-10 bg-gray-100 rounded animate-pulse" />
+                  : val == null ? '—'
+                  : <>{val}{suffix}</>
+                }
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Extension not connected warning */}
+        {extensionDisconnected && (
+          <div className="mb-5 flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg">
+            <span className="text-lg leading-none mt-0.5">⚠️</span>
+            <div>
+              <p className="font-medium">Extension not scanning</p>
+              <p className="text-amber-700 mt-0.5">No scan has been detected in the last 24 hours. Make sure Chrome is open and you're logged into Facebook.</p>
+            </div>
+          </div>
+        )}
+
         {/* Status filter tabs */}
         <div className="mb-6 overflow-x-auto -mx-4 px-4">
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-max min-w-full sm:w-fit sm:min-w-0">
@@ -81,13 +229,18 @@ export default function Dashboard() {
               <button
                 key={label}
                 onClick={() => handleFilterChange(value)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                   statusFilter === value
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 {label}
+                {value === 'new' && newCount > 0 && (
+                  <span className="bg-orange-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none">
+                    {newCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -107,45 +260,47 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Empty state */}
-        {!loading && !error && leads.length === 0 && (
-          <div className="text-center py-20">
-            <div className="text-5xl mb-4">📭</div>
-            <p className="text-gray-500 text-sm">
-              No leads yet. Make sure your Chrome extension is installed and Facebook groups are configured.
-            </p>
+        {/* Mark all seen */}
+        {!loading && statusFilter === 'new' && leads.length > 0 && (
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={handleMarkAllSeen}
+              disabled={markingAllSeen}
+              className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
+            >
+              {markingAllSeen ? 'Marking…' : 'Mark all seen'}
+            </button>
           </div>
         )}
+
+        {/* Empty state */}
+        {!loading && !error && leads.length === 0 && (() => {
+          const { icon, text } = EMPTY_MESSAGES[statusFilter] ?? EMPTY_MESSAGES[undefined];
+          return (
+            <div className="text-center py-20">
+              <div className="text-5xl mb-4">{icon}</div>
+              <p className="text-gray-500 text-sm max-w-sm mx-auto">{text}</p>
+            </div>
+          );
+        })()}
 
         {/* Lead cards */}
         {!loading && leads.length > 0 && (
           <>
             <div className="space-y-4">
               {leads.map((lead) => (
-                <LeadCard key={lead.id} lead={lead} onStatusChange={updateLeadStatus} />
+                <LeadCard key={lead.id} lead={lead} onStatusChange={handleStatusChange} />
               ))}
             </div>
 
-            {/* Load more */}
-            {hasMore && (
-              <div className="mt-6 text-center">
-                <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                >
-                  {loadingMore ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Loading…
-                    </>
-                  ) : (
-                    'Load more leads'
-                  )}
-                </button>
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="mt-4 h-1" />
+            {loadingMore && (
+              <div className="flex justify-center py-6">
+                <svg className="w-5 h-5 animate-spin text-orange-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
               </div>
             )}
 

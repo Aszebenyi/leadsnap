@@ -6,7 +6,7 @@ import {
   getAiDescription, getWebsiteUrl, getIncludeWebsite,
   isOnboardingComplete,
 } from './utils/storage.js';
-import { ingestLead } from './utils/api.js';
+import { ingestLead, heartbeat } from './utils/api.js';
 import { refreshToken, getUser, signInWithGoogle } from './utils/supabase-auth.js';
 import { API_URL, SUBSCRIPTION_STATUS, GOOGLE_CLIENT_ID } from './utils/config.js';
 
@@ -145,6 +145,9 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   }
 
   await setLastScanAt(Date.now());
+  // Notify backend so dashboard can show "extension connected" status
+  const token = await getAuthToken();
+  if (token) heartbeat(token).catch(() => {});
   console.log(`[LeadSnap] Scan cycle complete — ${totalFound} new lead(s) submitted`);
 
   sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: totalFound });

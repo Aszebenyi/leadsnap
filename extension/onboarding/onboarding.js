@@ -63,6 +63,9 @@ const step6ActionRow   = document.getElementById('step6-action-row');
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
+const stepLines         = document.querySelectorAll('.step-line');
+const stepProgressLabel = document.getElementById('step-progress-label');
+
 function goTo(step) {
   panels.forEach((p, i) => p.classList.toggle('visible', i + 1 === step));
   dots.forEach((d, i) => {
@@ -70,6 +73,8 @@ function goTo(step) {
     if (i + 1 < step)  d.classList.add('complete');
     if (i + 1 === step) d.classList.add('active');
   });
+  stepLines.forEach((l, i) => l.classList.toggle('complete', i + 1 < step));
+  if (stepProgressLabel) stepProgressLabel.textContent = `Step ${step} of ${TOTAL_STEPS}`;
   currentStep = step;
 
   // Step 5: auto-generate ideal-lead description via Claude

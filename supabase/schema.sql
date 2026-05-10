@@ -57,6 +57,7 @@ create table leads (
   group_name text,
   group_url text,
   score integer check (score >= 1 and score <= 10),
+  urgent boolean not null default false,
   ai_reply text,
   status text default 'new' check (status in ('new', 'seen', 'replied', 'won', 'lost')),
   matched_keywords text[],

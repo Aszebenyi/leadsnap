@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import Landing      from './pages/Landing';
 import Privacy      from './pages/Privacy';
@@ -37,10 +38,10 @@ export default function App() {
         <Route path="/signup"  element={<PublicRoute><Signup /></PublicRoute>} />
 
         {/* Protected */}
-        <Route path="/onboarding" element={<PrivateRoute><Onboarding /></PrivateRoute>} />
-        <Route path="/dashboard"  element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/settings"   element={<PrivateRoute><Settings /></PrivateRoute>} />
-        <Route path="/billing"    element={<PrivateRoute><Billing /></PrivateRoute>} />
+        <Route path="/onboarding" element={<PrivateRoute><ErrorBoundary><Onboarding /></ErrorBoundary></PrivateRoute>} />
+        <Route path="/dashboard"  element={<PrivateRoute><ErrorBoundary><Dashboard /></ErrorBoundary></PrivateRoute>} />
+        <Route path="/settings"   element={<PrivateRoute><ErrorBoundary><Settings /></ErrorBoundary></PrivateRoute>} />
+        <Route path="/billing"    element={<PrivateRoute><ErrorBoundary><Billing /></ErrorBoundary></PrivateRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

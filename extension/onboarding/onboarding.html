@@ -7,8 +7,17 @@
 </head>
 <body>
   <div class="card">
-    <div class="logo">LeadSnap</div>
-    <p class="welcome">Let's get you set up in 6 quick steps.</p>
+    <!-- Orange accent bar -->
+    <div class="card-accent"></div>
+
+    <!-- Logo -->
+    <div class="logo">
+      <span class="logo-mark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
+      </span>
+      LeadSnap
+    </div>
+    <p class="welcome">Quick setup — takes about 2 minutes.</p>
 
     <!-- Step indicators (6 dots) -->
     <div class="steps">
@@ -24,6 +33,7 @@
       <div class="step-line"></div>
       <div class="step-dot" id="dot-6">6</div>
     </div>
+    <div class="step-progress-label" id="step-progress-label">Step 1 of 6</div>
 
     <!-- ── Step 1: Connect Facebook ── -->
     <div class="step-panel visible" id="step-1">
