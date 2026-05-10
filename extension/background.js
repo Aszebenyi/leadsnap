@@ -4,10 +4,11 @@ import {
   getSelectedGroups, getKeywords, getScanningEnabled,
   getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
   getAiDescription, getWebsiteUrl, getIncludeWebsite,
+  isOnboardingComplete,
 } from './utils/storage.js';
 import { ingestLead } from './utils/api.js';
-import { refreshToken, getUser } from './utils/supabase-auth.js';
-import { API_URL, SUBSCRIPTION_STATUS } from './utils/config.js';
+import { refreshToken, getUser, signInWithGoogle } from './utils/supabase-auth.js';
+import { API_URL, SUBSCRIPTION_STATUS, GOOGLE_CLIENT_ID } from './utils/config.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -297,6 +298,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
+  if (message.type === 'GOOGLE_SIGN_IN') {
+    handleGoogleSignIn()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.type === 'LEADSNAP_MANUAL_SCAN') {
     runManualScan()
       .then(() => sendResponse({ ok: true }))
@@ -315,6 +323,44 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 });
+
+// ── Google sign-in (proxied here so the flow survives the popup closing) ──────
+
+async function handleGoogleSignIn() {
+  const session = await signInWithGoogle(GOOGLE_CLIENT_ID);
+
+  // Persist the Supabase session
+  await chrome.storage.sync.set({
+    auth_token: session.access_token,
+    user_id:    session.user.id,
+    user_email: session.user.email,
+  });
+  await chrome.storage.local.set({ refresh_token: session.refresh_token });
+
+  const onboarded = await isOnboardingComplete();
+
+  if (!onboarded) {
+    // New user — go straight to onboarding (reliable, no popup needed)
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+    return;
+  }
+
+  // Returning user — wait for the Google window to fully close and Chrome
+  // to regain focus before trying to reopen the popup.
+  await sleep(400);
+  try {
+    await chrome.action.openPopup();
+  } catch {
+    // openPopup unavailable (Chrome < 127) or window not focused — show a
+    // notification so the user knows sign-in worked.
+    chrome.notifications.create('leadsnap-signed-in', {
+      type:    'basic',
+      iconUrl: 'icons/icon48.png',
+      title:   'LeadSnap — Signed in!',
+      message: 'Click the LeadSnap icon in your toolbar to continue.',
+    });
+  }
+}
 
 async function handleLeadFound(payload) {
   const token = await getAuthToken();

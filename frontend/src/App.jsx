@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 
-import Landing    from './pages/Landing';
-import Privacy    from './pages/Privacy';
-import Terms      from './pages/Terms';
+import Landing      from './pages/Landing';
+import Privacy      from './pages/Privacy';
+import Terms        from './pages/Terms';
+import AuthCallback from './pages/AuthCallback';
 import Login      from './pages/Login';
 import Signup     from './pages/Signup';
 import Onboarding from './pages/Onboarding';
@@ -29,8 +30,9 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/"        element={<Landing />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms"   element={<Terms />} />
+        <Route path="/privacy"       element={<Privacy />} />
+        <Route path="/terms"         element={<Terms />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/login"   element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup"  element={<PublicRoute><Signup /></PublicRoute>} />
 

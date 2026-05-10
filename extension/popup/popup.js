@@ -9,6 +9,8 @@ import {
   getSelectedGroups,
   isOnboardingComplete,
 } from '../utils/storage.js';
+import { signIn, signUp } from '../utils/supabase-auth.js';
+import { getRefreshToken } from '../utils/storage.js';
 
 const DASHBOARD_URL = 'https://leadsnap-weld.vercel.app';
 
@@ -28,6 +30,10 @@ const statKeywords   = document.getElementById('stat-keywords');
 const statGroups     = document.getElementById('stat-groups');
 const statLastScan   = document.getElementById('stat-last-scan');
 const leadsList      = document.getElementById('leads-list');
+
+// ── Auth state ────────────────────────────────────────────────────────────────
+
+let authMode = 'signin'; // 'signin' | 'signup'
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -247,9 +253,126 @@ function escHtml(str) {
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 
-document.getElementById('btn-sign-in').addEventListener('click', () =>
-  chrome.tabs.create({ url: chrome.runtime.getURL('auth/auth.html') })
-);
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  document.getElementById('auth-success').classList.add('hidden');
+}
+
+function showAuthSuccess(msg) {
+  const el = document.getElementById('auth-success');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  document.getElementById('auth-error').classList.add('hidden');
+}
+
+function clearAuthMessages() {
+  document.getElementById('auth-error').classList.add('hidden');
+  document.getElementById('auth-success').classList.add('hidden');
+}
+
+function setAuthLoading(loading) {
+  document.getElementById('btn-google').disabled     = loading;
+  document.getElementById('btn-email-auth').disabled = loading;
+  document.getElementById('btn-mode-toggle').disabled = loading;
+}
+
+async function storeSession({ access_token, refresh_token, user }) {
+  await chrome.storage.sync.set({
+    auth_token: access_token,
+    user_id:    user.id,
+    user_email: user.email,
+  });
+  await chrome.storage.local.set({ refresh_token });
+}
+
+async function handleAuthSuccess(session) {
+  await storeSession(session);
+  const onboarded = await isOnboardingComplete();
+  if (!onboarded) {
+    showAuthSuccess('Account ready! Starting setup…');
+    setTimeout(() => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+      window.close();
+    }, 700);
+  } else {
+    token = session.access_token;
+    if (session.user?.email) userEmailEl.textContent = session.user.email;
+    showView('logged-in');
+    await loadStatus();
+  }
+}
+
+// Google sign-in — delegated to the background service worker so the OAuth
+// flow survives the popup closing when the Google window takes focus.
+document.getElementById('btn-google').addEventListener('click', () => {
+  clearAuthMessages();
+  setAuthLoading(true);
+  // Show a status note; the popup may close when Google's window opens.
+  // Background will call chrome.action.openPopup() after sign-in completes.
+  showAuthSuccess('Opening Google sign-in…');
+  chrome.runtime.sendMessage({ type: 'GOOGLE_SIGN_IN' }, (response) => {
+    // This callback only fires if the popup is still open (rare).
+    setAuthLoading(false);
+    if (response?.error) showAuthError(response.error);
+  });
+});
+
+// Email / password sign-in or sign-up
+document.getElementById('btn-email-auth').addEventListener('click', async () => {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+
+  if (!email || !password) {
+    showAuthError('Please enter your email and password.');
+    return;
+  }
+
+  clearAuthMessages();
+  setAuthLoading(true);
+
+  try {
+    const session = authMode === 'signup'
+      ? await signUp(email, password)
+      : await signIn(email, password);
+    await handleAuthSuccess(session);
+  } catch (err) {
+    showAuthError(err.message || 'Sign-in failed. Please try again.');
+  } finally {
+    setAuthLoading(false);
+  }
+});
+
+// Sign in ↔ sign up toggle
+document.getElementById('btn-mode-toggle').addEventListener('click', () => {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  const isSignup = authMode === 'signup';
+  document.getElementById('btn-email-auth').textContent  = isSignup ? 'Create Account' : 'Sign In';
+  document.getElementById('auth-switch-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
+  document.getElementById('btn-mode-toggle').textContent  = isSignup ? 'Sign in' : 'Sign up free';
+  document.getElementById('auth-password').autocomplete   = isSignup ? 'new-password' : 'current-password';
+  clearAuthMessages();
+});
+
+// ── Dashboard opener — passes auth tokens so the web app is logged in ─────────
+
+async function openDashboardTab(path = '/dashboard') {
+  const storedRefreshToken = await getRefreshToken();
+  const accessToken        = token; // already in module scope
+
+  if (accessToken && storedRefreshToken) {
+    // Route through /auth/callback which calls supabase.auth.setSession()
+    // directly, avoiding the race condition between detectSessionInUrl and
+    // PrivateRoute that would otherwise redirect the user to /login.
+    const hash = `#access_token=${accessToken}&refresh_token=${encodeURIComponent(storedRefreshToken)}&token_type=bearer`;
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/auth/callback${hash}` });
+  } else {
+    chrome.tabs.create({ url: `${DASHBOARD_URL}${path}` });
+  }
+}
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
   await clearSession();
@@ -257,7 +380,7 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-upgrade').addEventListener('click', () =>
-  chrome.tabs.create({ url: `${DASHBOARD_URL}/billing` })
+  openDashboardTab('/billing')
 );
 
 document.getElementById('btn-scan-now').addEventListener('click', () => {
@@ -266,29 +389,29 @@ document.getElementById('btn-scan-now').addEventListener('click', () => {
 });
 
 document.getElementById('btn-view-leads').addEventListener('click', () =>
-  chrome.tabs.create({ url: DASHBOARD_URL })
+  openDashboardTab('/dashboard')
 );
 
 document.getElementById('btn-all-leads').addEventListener('click', () =>
-  chrome.tabs.create({ url: DASHBOARD_URL })
+  openDashboardTab('/dashboard')
 );
 
 document.getElementById('btn-open-dashboard').addEventListener('click', () =>
-  chrome.tabs.create({ url: DASHBOARD_URL })
+  openDashboardTab('/dashboard')
 );
 
-// Settings → open dashboard to the right section
+// Settings → open dashboard (auth hash + settings path)
 document.getElementById('btn-manage-kw').addEventListener('click', () =>
-  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#keywords` })
+  openDashboardTab('/settings')
 );
 document.getElementById('btn-manage-groups').addEventListener('click', () =>
-  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#groups` })
+  openDashboardTab('/settings')
 );
 document.getElementById('btn-edit-phone').addEventListener('click', () =>
-  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#phone` })
+  openDashboardTab('/settings')
 );
 document.getElementById('btn-edit-website').addEventListener('click', () =>
-  chrome.tabs.create({ url: `${DASHBOARD_URL}/settings#website` })
+  openDashboardTab('/settings')
 );
 
 toggleScanning.addEventListener('change', (e) => {

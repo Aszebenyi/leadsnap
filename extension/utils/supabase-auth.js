@@ -104,9 +104,6 @@ export async function signInWithGoogle(clientId) {
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const redirectUri   = chrome.identity.getRedirectURL();
 
-  console.log('%c[LeadSnap] Add this EXACT string to Google Cloud Console → Credentials → OAuth client → Authorized redirect URIs:', 'font-weight:bold;color:orange');
-  console.log(redirectUri);
-
   // Step 1 — build the Google OAuth URL directly, using the chromiumapp redirect URI
   const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
     client_id:             clientId,
@@ -118,9 +115,6 @@ export async function signInWithGoogle(clientId) {
     access_type:           'offline',
     prompt:                'select_account',
   }).toString();
-
-  console.log('[LeadSnap] Full OAuth URL:', authUrl);
-  console.log('[LeadSnap] redirect_uri param (decoded):', new URLSearchParams(new URL(authUrl).search).get('redirect_uri'));
 
   const callbackUrl = await new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
