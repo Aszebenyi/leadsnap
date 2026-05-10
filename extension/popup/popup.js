@@ -8,9 +8,10 @@ import {
   getLastScanAt,
   getSelectedGroups,
   isOnboardingComplete,
+  getRefreshToken,
+  setSession,
 } from '../utils/storage.js';
 import { signIn, signUp } from '../utils/supabase-auth.js';
-import { getRefreshToken } from '../utils/storage.js';
 
 const DASHBOARD_URL = 'https://leadsnap-weld.vercel.app';
 
@@ -26,6 +27,7 @@ const statusDot      = document.getElementById('status-dot');
 const statusTitle    = document.getElementById('status-title');
 const statusSub      = document.getElementById('status-sub');
 const toggleScanning = document.getElementById('toggle-scanning');
+const scanNowBtn     = document.getElementById('btn-scan-now');
 const statKeywords   = document.getElementById('stat-keywords');
 const statGroups     = document.getElementById('stat-groups');
 const statLastScan   = document.getElementById('stat-last-scan');
@@ -121,10 +123,16 @@ async function loadStatus() {
   if (subStatus === 'inactive') {
     setStatusCard('error', 'Subscription expired', 'Scanning paused');
     subBanner.classList.remove('hidden');
+    scanNowBtn.disabled = true;
+    scanNowBtn.title    = 'Active subscription required to scan';
   } else if (!scanningEnabled) {
     setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
+    scanNowBtn.disabled = true;
+    scanNowBtn.title    = 'Enable monitoring to scan';
   } else {
     setStatusCard('active', 'Monitoring active', 'Scanning every 10 minutes');
+    scanNowBtn.disabled = false;
+    scanNowBtn.title    = '';
   }
 }
 
@@ -146,8 +154,26 @@ function formatLastScan(ts) {
 
 // ── Leads tab ─────────────────────────────────────────────────────────────────
 
+function renderLeadSkeletons(count = 3) {
+  return Array.from({ length: count }).map(() => `
+    <div class="lead-skeleton">
+      <div class="lead-skeleton-top">
+        <div class="skeleton-line" style="width:55%;height:10px"></div>
+        <div class="skeleton-line" style="width:18%;height:10px"></div>
+      </div>
+      <div class="lead-skeleton-lines">
+        <div class="skeleton-line" style="width:100%;height:11px;margin-bottom:5px"></div>
+        <div class="skeleton-line" style="width:78%;height:11px"></div>
+      </div>
+      <div class="lead-skeleton-kws">
+        <div class="skeleton-line" style="width:52px;height:17px;border-radius:4px"></div>
+        <div class="skeleton-line" style="width:66px;height:17px;border-radius:4px"></div>
+      </div>
+    </div>`).join('');
+}
+
 async function loadLeads() {
-  leadsList.innerHTML = '<div class="leads-loading"><div class="spinner sm"></div></div>';
+  leadsList.innerHTML = renderLeadSkeletons(3);
 
   try {
     const data = await getLeads(token, { limit: 5 });
@@ -183,7 +209,7 @@ function renderLeadCard(lead) {
   const kws      = (lead.matched_keywords ?? []).slice(0, 3);
   const timeAgo  = relativeTime(lead.detected_at ?? lead.created_at);
   const groupName = lead.group_name || 'Facebook Group';
-  const fbUrl    = lead.post_url || null;
+  const fbUrl    = safeUrl(lead.post_url || '');
 
   return `
     <div class="lead-card">
@@ -251,6 +277,16 @@ function escHtml(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Returns the URL only if it uses http or https — prevents javascript: href injection. */
+function safeUrl(url) {
+  try {
+    const u = new URL(url);
+    return (u.protocol === 'https:' || u.protocol === 'http:') ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Event listeners ───────────────────────────────────────────────────────────
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -280,17 +316,13 @@ function setAuthLoading(loading) {
   document.getElementById('btn-mode-toggle').disabled = loading;
 }
 
-async function storeSession({ access_token, refresh_token, user }) {
-  await chrome.storage.sync.set({
-    auth_token: access_token,
-    user_id:    user.id,
-    user_email: user.email,
-  });
-  await chrome.storage.local.set({ refresh_token });
-}
-
 async function handleAuthSuccess(session) {
-  await storeSession(session);
+  await setSession({
+    accessToken:  session.access_token,
+    refreshToken: session.refresh_token,
+    userId:       session.user.id,
+    userEmail:    session.user.email,
+  });
   const onboarded = await isOnboardingComplete();
   if (!onboarded) {
     showAuthSuccess('Account ready! Starting setup…');
@@ -418,8 +450,12 @@ toggleScanning.addEventListener('change', (e) => {
   setScanningEnabled(e.target.checked);
   if (e.target.checked) {
     setStatusCard('active', 'Monitoring active', 'Scanning every 10 minutes');
+    scanNowBtn.disabled = false;
+    scanNowBtn.title    = '';
   } else {
     setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
+    scanNowBtn.disabled = true;
+    scanNowBtn.title    = 'Enable monitoring to scan';
   }
 });
 

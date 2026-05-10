@@ -329,13 +329,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function handleGoogleSignIn() {
   const session = await signInWithGoogle(GOOGLE_CLIENT_ID);
 
-  // Persist the Supabase session
-  await chrome.storage.sync.set({
-    auth_token: session.access_token,
-    user_id:    session.user.id,
-    user_email: session.user.email,
+  // Persist the Supabase session via the canonical storage abstraction
+  await setSession({
+    accessToken:  session.access_token,
+    refreshToken: session.refresh_token,
+    userId:       session.user.id,
+    userEmail:    session.user.email,
   });
-  await chrome.storage.local.set({ refresh_token: session.refresh_token });
 
   const onboarded = await isOnboardingComplete();
 

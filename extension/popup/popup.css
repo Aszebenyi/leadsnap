@@ -267,6 +267,29 @@ body {
   display: flex; justify-content: center; padding: 24px 0;
 }
 
+/* ── Lead skeleton ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton-line {
+  border-radius: 5px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e9eaeb 50%, #f3f4f6 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.lead-skeleton {
+  border: 1px solid var(--rule); border-radius: 10px;
+  padding: 11px 13px; margin-bottom: 8px;
+}
+.lead-skeleton:last-child { margin-bottom: 0; }
+.lead-skeleton-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 7px;
+}
+.lead-skeleton-lines { margin-bottom: 7px; }
+.lead-skeleton-kws { display: flex; gap: 4px; }
+
 .lead-card {
   border: 1px solid var(--rule); border-radius: 10px;
   padding: 11px 13px;

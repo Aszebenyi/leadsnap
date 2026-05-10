@@ -27,6 +27,12 @@ router.put('/', requireAuth, async (req, res, next) => {
   try {
     const { business_name, service_description, phone_number, timezone } = req.body;
 
+    // Length guards — prevent oversized strings reaching Claude or the DB
+    if (business_name     !== undefined && String(business_name).length     > 200)  return res.status(400).json({ error: 'business_name must be 200 characters or fewer' });
+    if (service_description !== undefined && String(service_description).length > 2000) return res.status(400).json({ error: 'service_description must be 2000 characters or fewer' });
+    if (phone_number      !== undefined && String(phone_number).length      > 30)   return res.status(400).json({ error: 'phone_number must be 30 characters or fewer' });
+    if (timezone          !== undefined && String(timezone).length          > 60)   return res.status(400).json({ error: 'timezone must be 60 characters or fewer' });
+
     const updates = {};
     if (business_name !== undefined) updates.business_name = business_name;
     if (service_description !== undefined) updates.service_description = service_description;
@@ -52,6 +58,37 @@ router.put('/', requireAuth, async (req, res, next) => {
   }
 });
 
+// ── SSRF protection helper ────────────────────────────────────────────────────
+
+/**
+ * Returns true if the hostname points to a private/loopback/link-local address.
+ * Blocks cloud metadata endpoints (169.254.169.254), RFC 1918 private ranges,
+ * loopback addresses, and other non-routable hosts.
+ *
+ * Note: this is hostname-level protection. DNS rebinding attacks are out of scope
+ * for this threat model (users are authenticated and can only harm themselves).
+ */
+function isPrivateHost(hostname) {
+  // Loopback and special names
+  if (/^(localhost|ip6-localhost|ip6-loopback)$/i.test(hostname)) return true;
+
+  // IPv4 loopback
+  if (/^127\./.test(hostname)) return true;
+
+  // Unspecified
+  if (hostname === '0.0.0.0' || hostname === '::' || hostname === '::1') return true;
+
+  // Link-local — includes AWS/GCP/Azure metadata (169.254.169.254)
+  if (/^169\.254\./.test(hostname)) return true;
+
+  // RFC 1918 private ranges
+  if (/^10\./.test(hostname)) return true;
+  if (/^192\.168\./.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
+
+  return false;
+}
+
 // POST /api/profile/extract-website
 router.post('/extract-website', requireAuth, async (req, res, next) => {
   try {
@@ -67,6 +104,11 @@ router.post('/extract-website', requireAuth, async (req, res, next) => {
     }
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
       return res.status(400).json({ error: 'URL must use http or https' });
+    }
+
+    // SSRF protection — block private/internal hosts
+    if (isPrivateHost(parsedUrl.hostname)) {
+      return res.status(400).json({ error: 'URL must be a publicly accessible website' });
     }
 
     // Fetch the page HTML (10s timeout, follow redirects)

@@ -81,6 +81,7 @@ create table alerts (
 
 create index leads_user_id_created_at_idx on leads (user_id, created_at desc);
 create index leads_status_idx on leads (user_id, status);
+create index leads_detected_at_idx on leads (detected_at); -- used by the 90-day cleanup job
 create index keywords_user_id_idx on keywords (user_id);
 create index groups_user_id_idx on groups (user_id);
 create index subscriptions_user_id_idx on subscriptions (user_id);

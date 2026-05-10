@@ -5,7 +5,7 @@ LeadSnap is a Chrome Extension SaaS that monitors Facebook groups for job reques
 
 ## Core User Flow
 1. User visits landing page → clicks "Add to Chrome" → installs extension
-2. Extension auth page opens → user signs in with Google (OAuth via `chrome.identity`)
+2. Extension popup opens → user signs in with Google or email/password directly in the popup
 3. 6-step extension onboarding: connect Facebook → select groups → add keywords → extract from website → describe ideal lead → phone number
 4. Extension runs in background while Chrome is open, scanning every 10 minutes
 5. Extension content script scrapes Facebook group posts and matches against keywords
@@ -32,15 +32,15 @@ LeadSnap is a Chrome Extension SaaS that monitors Facebook groups for job reques
 
 ### Chrome Extension
 - Manifest V3, vanilla JavaScript (ES modules where supported)
-- **Auth:** Google OAuth only via `chrome.identity.launchWebAuthFlow` + Supabase PKCE flow. No email/password in the extension.
-- Background service worker (`background.js`) — `chrome.alarms` scan loop every 10 min, token refresh alarm every 55 min, subscription cache with 1-hour TTL
+- **Auth:** Inline login in popup — Google OAuth via `chrome.identity.launchWebAuthFlow` (proxied through background service worker) + email/password via Supabase REST. No separate auth page for login.
+- Background service worker (`background.js`) — scan loop every 10 min, token refresh every 55 min, subscription cache 1-hour TTL, handles Google sign-in on behalf of popup
 - Content script (`content.js`) — Facebook DOM scraper using `role="article"` elements, three-strategy text extraction, keyword matching, deduplication, group discovery
-- Popup UI — 3-tab design (Status / Leads / Settings), 380px wide, orange brand, lazy-loads last 5 leads
+- Popup UI — inline login (Google + email/password) when logged out; 3-tab design (Status / Leads / Settings) when logged in; 380px wide, orange brand
 - 6-step onboarding wizard (see Extension Onboarding section below)
-- Auth page — Google-only sign-in with bolt logo
 - `chrome.storage.sync` — auth token, user ID, email, keywords, selected groups, AI description, phone, website URL, include-website toggle, onboarding_complete
 - `chrome.storage.local` — refresh token, lead cache
 - All backend calls go through `utils/api.js`; base URL is a single constant in `utils/config.js`
+- Opening dashboard passes tokens via `/auth/callback` hash so web app is logged in automatically
 
 ### Backend
 - Node.js + Express, hosted on Railway
@@ -60,9 +60,10 @@ LeadSnap is a Chrome Extension SaaS that monitors Facebook groups for job reques
 
 ### Frontend Dashboard + Landing Page
 - React + Vite + Tailwind CSS v4
-- React Router — public routes (`/`, `/login`, `/signup`, `/privacy`, `/terms`) + protected routes (`/dashboard`, `/settings`, `/billing`, `/onboarding`)
+- React Router — public routes (`/`, `/login`, `/signup`, `/privacy`, `/terms`, `/auth/callback`) + protected routes (`/dashboard`, `/settings`, `/billing`, `/onboarding`)
 - Hosted on Vercel (`vercel.json` SPA rewrite in place)
 - Auth: Supabase Auth SDK (`supabase.auth.signInWithOAuth` for Google, email+password also available)
+- `/auth/callback` — dedicated page that receives tokens from extension via URL hash, calls `supabase.auth.setSession()` explicitly, then redirects to `/dashboard`
 - All data via backend API (`src/lib/api.js`)
 - Fully responsive — mobile hamburger nav, scrollable tab rows, proper touch targets (min 44px)
 
@@ -83,18 +84,18 @@ leadsnap/
 │
 ├── extension/                        ← Chrome Extension (MV3)
 │   ├── manifest.json
-│   ├── background.js                 ← service worker: scan loop, token refresh, notifications
+│   ├── background.js                 ← service worker: scan loop, token refresh, Google sign-in proxy, notifications
 │   ├── content.js                    ← Facebook DOM scraper + group discovery
 │   ├── auth/
-│   │   ├── auth.html                 ← Google-only sign-in page (bolt logo, orange)
-│   │   └── auth.js                   ← handles signInWithGoogle(), storeSession(), onboarding redirect
+│   │   ├── auth.html                 ← legacy sign-in page (kept but no longer the primary login flow)
+│   │   └── auth.js                   ← legacy auth page logic
 │   ├── onboarding/
 │   │   ├── onboarding.html           ← 6-step wizard HTML
 │   │   ├── onboarding.js             ← wizard logic (ES module)
 │   │   └── onboarding.css            ← wizard styles (orange brand)
 │   ├── popup/
-│   │   ├── popup.html                ← 3-tab popup (Status / Leads / Settings)
-│   │   ├── popup.js                  ← popup logic
+│   │   ├── popup.html                ← inline login when logged out; 3-tab UI when logged in
+│   │   ├── popup.js                  ← popup logic + inline auth (Google + email/password)
 │   │   └── popup.css                 ← popup styles (380px, orange brand)
 │   ├── monitor/
 │   │   └── monitor.html              ← hidden window used during Facebook scan
@@ -104,17 +105,17 @@ leadsnap/
 │   │   ├── icon48.png
 │   │   └── icon128.png
 │   └── utils/
-│       ├── config.js                 ← API_URL + SUPABASE_URL/ANON_KEY + SUBSCRIPTION_STATUS constants
+│       ├── config.js                 ← API_URL + SUPABASE_URL/ANON_KEY + GOOGLE_CLIENT_ID + SUBSCRIPTION_STATUS
 │       ├── api.js                    ← all fetch calls to backend (imports API_URL from config.js)
 │       ├── storage.js                ← chrome.storage helpers (background/popup context)
 │       ├── storage-content.js        ← chrome.storage helpers (content script context)
-│       └── supabase-auth.js          ← Supabase REST auth wrapper + signInWithGoogle() PKCE
+│       └── supabase-auth.js          ← Supabase REST auth wrapper + signInWithGoogle() PKCE flow
 │
 ├── backend/                          ← Node.js + Express API
 │   ├── src/
 │   │   ├── index.js                  ← Express app: CORS, rate limiters, route mounts, error handler
 │   │   ├── routes/
-│   │   │   ├── auth.js               ← placeholder (auth is client-side via Supabase)
+│   │   │   ├── auth.js               ← POST /api/auth/google-exchange (proxies Google OAuth code exchange)
 │   │   │   ├── leads.js              ← /api/leads/ingest, GET, PATCH; daily SMS cap logic
 │   │   │   ├── keywords.js           ← /api/keywords CRUD
 │   │   │   ├── groups.js             ← /api/groups CRUD
@@ -148,7 +149,8 @@ leadsnap/
     │   │   ├── Billing.jsx           ← Stripe checkout + portal + subscription status
     │   │   ├── Onboarding.jsx        ← 4-step web onboarding (profile → keywords → groups → install)
     │   │   ├── Privacy.jsx           ← Privacy Policy page (/privacy)
-    │   │   └── Terms.jsx             ← Terms of Service page (/terms)
+    │   │   ├── Terms.jsx             ← Terms of Service page (/terms)
+    │   │   └── AuthCallback.jsx      ← /auth/callback — receives tokens from extension, calls setSession(), redirects to /dashboard
     │   ├── components/
     │   │   ├── LeadCard.jsx          ← lead card with score badge, AI reply, status selector
     │   │   └── Navbar.jsx            ← responsive nav with hamburger menu on mobile
@@ -274,8 +276,12 @@ create table alerts (
 
 ## API Routes
 
-### Auth — handled entirely client-side via Supabase Auth SDK
-Backend only validates the JWT on each request. `routes/auth.js` is a placeholder.
+### POST /api/auth/google-exchange
+- Called by extension after getting a Google OAuth auth code via `launchWebAuthFlow`
+- Body: `{ code, code_verifier, redirect_uri }`
+- Exchanges code with Google using `GOOGLE_CLIENT_SECRET` → gets `id_token`
+- Exchanges `id_token` with Supabase → returns `{ access_token, refresh_token, user }`
+- No auth required (this IS the auth endpoint)
 
 ### POST /api/leads/ingest
 - Called by extension when a matched post is found
@@ -372,6 +378,10 @@ TWILIO_PHONE_NUMBER=
 
 ANTHROPIC_API_KEY=
 
+# Google OAuth — Web application client (for server-side code exchange)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
 FRONTEND_URL=https://leadsnap.app   # used for CORS
 ```
 
@@ -384,9 +394,10 @@ VITE_API_URL=https://leadsnap-backend-production.up.railway.app
 
 ### Extension (`utils/config.js`)
 ```js
-export const SUPABASE_URL     = '...';   // Supabase project URL
-export const SUPABASE_ANON_KEY = '...';  // anon key (safe in client)
+export const SUPABASE_URL      = '...';   // Supabase project URL
+export const SUPABASE_ANON_KEY = '...';   // anon key (safe in client)
 export const API_URL           = 'https://leadsnap-backend-production.up.railway.app';
+export const GOOGLE_CLIENT_ID  = '...';   // Web application OAuth client ID
 ```
 **Never hardcode the Railway URL anywhere other than `config.js`.** All other extension files import `API_URL` from there.
 
@@ -411,22 +422,44 @@ export const API_URL           = 'https://leadsnap-backend-production.up.railway
 1. Free trial: 7 days full access, no card required
 2. After trial, user must subscribe to continue — extension checks on startup and every hour
 3. SMS alerts capped at 50 per day per user
-4. Leads retained for 90 days (**note: automated cleanup not yet implemented — needs Supabase scheduled function or pg_cron**)
+4. Leads retained for 90 days (**note: automated cleanup not yet implemented — needs Supabase scheduled function**)
 5. Extension only scans when Chrome is open and user is logged into Facebook
 6. Users can only access their own data (Row Level Security enforced on all tables)
 7. The `website_url` is only included in AI replies when the user enables the "Include website in replies" toggle (stored in `chrome.storage.sync` as `include_website_in_replies`)
 
 ---
 
-## What's Still To Build / Known Gaps
+## TODO — Ordered by Priority
 
-- **90-day lead cleanup** — privacy policy promises this; needs a Supabase scheduled function
-- **Dashboard pagination UI** — backend supports `limit`/`offset`, frontend doesn't expose it yet
-- **Account deletion UI** — promised in privacy policy; currently email-only
-- **Data export (CSV)** — promised in privacy policy; not yet built
-- **Urgent badge on lead cards** — Claude returns `urgent: boolean` but the Dashboard never surfaces it
-- **Chrome Web Store submission** — CWS URL is a placeholder (`https://chrome.google.com/webstore/detail/leadsnap`); update after publishing
-- **No tests** — no unit or integration tests exist anywhere in the project
+### Blocked (waiting on Facebook device usage requirement)
+- Meta Developer account → Facebook App ID → wire up OAuth
+- Anthropic API credits → add `ANTHROPIC_API_KEY` to Railway
+- Twilio phone number → add `TWILIO_PHONE_NUMBER` to Railway
+
+### Must Fix Before Launch
+1. **90-day lead cleanup** — Supabase scheduled function (pg_cron); privacy policy promises this
+2. **Dashboard pagination UI** — backend supports `limit`/`offset`, frontend doesn't expose it yet
+3. **Loading skeleton cards** — replace spinners with skeleton UI on dashboard
+4. **Extension popup polish** — production-ready look and feel
+5. **Chrome Web Store assets** — screenshots (1280×800, min 3), promo tile (440×280), description, permission justifications
+6. **Chrome Web Store submission** — CWS URL is a placeholder; update everywhere after publishing
+7. **Full end-to-end test** — extension detects post → backend scores → SMS sent
+8. **Test subscription expiry / trial end paywall**
+9. **Test SMS daily cap** (50/user)
+10. **Facebook DOM selectors** — test on real groups, update if needed
+
+### Ship Soon After Launch
+- Account deletion UI + CSV data export in Settings (both promised in Privacy Policy)
+- Urgent badge on lead cards (Claude returns `urgent: boolean`, Dashboard never surfaces it)
+- React error boundary on dashboard
+- "Extension not connected" warning on dashboard when no scan in 24hrs
+- Mobile landing page hero text overflow fix
+
+### Post Launch
+- Lead search and date filtering
+- Stats strip on dashboard (leads this week, avg score, wins)
+- Email fallback for SMS alerts
+- Feedback loop — leads marked won/lost update AI scoring weights
 
 ---
 
@@ -439,16 +472,31 @@ export const API_URL           = 'https://leadsnap-backend-production.up.railway
 - Content scripts cannot use ES modules — `storage-content.js` uses `importScripts`-compatible patterns
 - All API keys must be on the backend, never in the extension
 
-### Google OAuth in the Extension (PKCE Flow)
-1. Generate code verifier (random 32 bytes, base64url)
-2. Derive code challenge (SHA-256 of verifier, base64url)
-3. Build Supabase OAuth URL with `provider=google`, `redirect_to=chrome.identity.getRedirectURL()`
-4. Open via `chrome.identity.launchWebAuthFlow({ interactive: true })`
-5. Extract `code` from the callback URL
-6. POST to `/auth/v1/token?grant_type=pkce` with `{ auth_code, code_verifier }`
-7. Store `access_token` in `chrome.storage.sync`, `refresh_token` in `chrome.storage.local`
+### Google OAuth in the Extension
+The extension uses a **Web application** OAuth client (not a Chrome extension type client). Flow:
 
-**One-time setup required:** Add `chrome.identity.getRedirectURL()` value to Supabase Auth → URL Configuration → Redirect URLs.
+1. User clicks "Continue with Google" in popup
+2. Popup sends `{ type: 'GOOGLE_SIGN_IN' }` message to background service worker
+   - *Popup closes when Google window opens; background persists*
+3. Background calls `signInWithGoogle(GOOGLE_CLIENT_ID)` in `supabase-auth.js`
+4. `launchWebAuthFlow` opens Google sign-in; PKCE verifier/challenge generated locally
+5. Google redirects to `chrome.identity.getRedirectURL()` with auth code
+6. Extension POSTs `{ code, code_verifier, redirect_uri }` to `/api/auth/google-exchange`
+7. Backend exchanges code + `GOOGLE_CLIENT_SECRET` with Google → gets `id_token`
+8. Backend exchanges `id_token` with Supabase → returns Supabase session
+9. Background stores session in `chrome.storage`, calls `chrome.action.openPopup()`
+
+**Google Cloud Console setup required:**
+- OAuth client type: **Web application**
+- Authorized redirect URI: `chrome.identity.getRedirectURL()` value (logged to console on first attempt)
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must be set in Railway env vars
+
+### Extension → Dashboard Login Handoff
+When opening the dashboard from the popup, tokens are passed via URL hash:
+```
+https://leadsnap.app/auth/callback#access_token=...&refresh_token=...&token_type=bearer
+```
+`AuthCallback.jsx` calls `supabase.auth.setSession()` directly to avoid the race condition where `PrivateRoute` would redirect to `/login` before `detectSessionInUrl` fires.
 
 ### Facebook DOM Notes
 - Facebook frequently changes class names — use `role="article"` and `data-testid` where possible

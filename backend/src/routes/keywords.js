@@ -30,6 +30,9 @@ router.post('/', requireAuth, requireSubscription, async (req, res, next) => {
     if (!keyword || typeof keyword !== 'string' || !keyword.trim()) {
       return res.status(400).json({ error: 'keyword is required' });
     }
+    if (keyword.trim().length > 100) {
+      return res.status(400).json({ error: 'keyword must be 100 characters or fewer' });
+    }
 
     const { data, error } = await supabase
       .from('keywords')

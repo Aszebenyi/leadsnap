@@ -20,7 +20,7 @@ import profileRoutes from './routes/profile.js';
 import billingRoutes from './routes/billing.js';
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 
@@ -53,6 +53,16 @@ const checkoutLimiter = rateLimit({
   message: { error: 'Too many checkout requests, please try again later.' },
 });
 
+// Auth (google-exchange): 20 requests per 15 minutes per IP.
+// Tight limit — legitimate users rarely call this more than once per session.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again later.' },
+});
+
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   // Chrome extension popups send requests with a chrome-extension:// origin.
@@ -77,8 +87,9 @@ app.use(cors({
 app.use(generalLimiter);
 
 // Apply tighter limiters to specific high-value endpoints
-app.use('/api/leads/ingest', ingestLimiter);
-app.use('/api/billing/checkout', checkoutLimiter);
+app.use('/api/leads/ingest',      ingestLimiter);
+app.use('/api/billing/checkout',  checkoutLimiter);
+app.use('/api/auth',              authLimiter);
 
 // Stripe webhook needs raw body before JSON parser
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
