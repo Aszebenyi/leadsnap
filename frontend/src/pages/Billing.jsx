@@ -69,7 +69,7 @@ export default function Billing() {
     : null;
 
   const STATUS_LABEL = {
-    trial:     { label: 'Free trial',   color: 'bg-blue-100 text-blue-700'   },
+    trial:     { label: 'Free trial',   color: 'bg-orange-100 text-orange-700'   },
     active:    { label: 'Active',       color: 'bg-green-100 text-green-700' },
     past_due:  { label: 'Past due',     color: 'bg-yellow-100 text-yellow-700' },
     cancelled: { label: 'Cancelled',   color: 'bg-red-100 text-red-600'     },
@@ -112,7 +112,7 @@ export default function Billing() {
 
             {/* Dates */}
             {status === 'trial' && trialEnd && (
-              <div className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
+              <div className="text-sm text-gray-600 bg-orange-50 border border-orange-100 rounded-lg px-4 py-3">
                 Your free trial ends on <strong>{trialEnd}</strong>. Subscribe to keep access after that.
               </div>
             )}
@@ -142,7 +142,7 @@ export default function Billing() {
                 <button
                   onClick={handleSubscribe}
                   disabled={actionLoading}
-                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
                 >
                   {actionLoading ? 'Redirecting…' : 'Subscribe — $29/month'}
                 </button>
@@ -152,7 +152,7 @@ export default function Billing() {
                 <button
                   onClick={handleManage}
                   disabled={actionLoading}
-                  className="w-full border border-gray-300 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
                   {actionLoading ? 'Redirecting…' : 'Manage billing'}
                 </button>
@@ -162,7 +162,7 @@ export default function Billing() {
                 <button
                   onClick={handleSubscribe}
                   disabled={actionLoading}
-                  className="mt-2 w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="mt-2 w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
                 >
                   {actionLoading ? 'Redirecting…' : 'Subscribe now — $29/month'}
                 </button>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import './Landing.css';
 
@@ -11,10 +12,15 @@ const BoltIcon = ({ size = 15 }) => (
 );
 
 export default function Landing() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  function closeMobileMenu() { setMobileMenuOpen(false); }
+
   return (
     <div className="ls-root">
 
       {/* ── Nav ── */}
+      <div className="ls-nav-wrap">
       <nav className="ls-nav">
         <a className="ls-brand" href="#">
           <span className="ls-brand-mark"><BoltIcon /></span>
@@ -26,10 +32,34 @@ export default function Landing() {
           <a href="#faq">FAQ</a>
         </div>
         <div className="ls-nav-cta">
-          <Link to="/login" className="ls-btn secondary nav">Sign in</Link>
+          <Link to="/login" className="ls-btn secondary nav ls-nav-signin">Sign in</Link>
           <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary nav">Add to Chrome</a>
         </div>
+        {/* Hamburger — mobile only */}
+        <button
+          className="ls-hamburger"
+          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          onClick={() => setMobileMenuOpen((o) => !o)}
+        >
+          <span className={`ls-ham-bar ${mobileMenuOpen ? 'ls-ham-bar--top-open' : ''}`} />
+          <span className={`ls-ham-bar ${mobileMenuOpen ? 'ls-ham-bar--mid-open' : ''}`} />
+          <span className={`ls-ham-bar ${mobileMenuOpen ? 'ls-ham-bar--bot-open' : ''}`} />
+        </button>
       </nav>
+
+      {/* Mobile nav drawer */}
+      {mobileMenuOpen && (
+        <div className="ls-mobile-menu">
+          <a href="#how"      className="ls-mobile-link" onClick={closeMobileMenu}>How it works</a>
+          <a href="#pricing"  className="ls-mobile-link" onClick={closeMobileMenu}>Pricing</a>
+          <a href="#faq"      className="ls-mobile-link" onClick={closeMobileMenu}>FAQ</a>
+          <div className="ls-mobile-menu-cta">
+            <Link to="/login" className="ls-btn secondary" onClick={closeMobileMenu}>Sign in</Link>
+            <a href={CWS_URL} target="_blank" rel="noreferrer" className="ls-btn primary" onClick={closeMobileMenu}>Add to Chrome</a>
+          </div>
+        </div>
+      )}
+      </div>{/* end ls-nav-wrap */}
 
       {/* ── Hero ── */}
       <header className="ls-hero">

@@ -187,6 +187,37 @@ body {
   margin-bottom: 8px;
 }
 .ai-textarea:focus { border-color: #f97316; }
+/* ── Step 5 AI-suggestion status bar ── */
+.step5-ai-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #c2410c;
+  margin-bottom: 10px;
+}
+.step5-ai-note { font-weight: 500; }
+
+/* ── Step 5 validation error ── */
+.step5-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #b91c1c;
+  margin-bottom: 10px;
+}
+
+/* Small inline spinner variant — used alongside .spinner */
+.spinner.spinner-sm {
+  width: 14px; height: 14px;
+}
+
 .ai-hint {
   font-size: 12px; color: #6b7280;
   line-height: 1.5;

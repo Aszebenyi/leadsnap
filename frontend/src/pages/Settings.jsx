@@ -120,6 +120,7 @@ export default function Settings() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500';
 
   if (loading) {
     return (
@@ -150,22 +151,22 @@ export default function Settings() {
           <form onSubmit={handleSaveProfile} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Business name</label>
-              <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Service description</label>
-              <textarea value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+              <textarea value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
               <p className="text-xs text-gray-400 mt-1">Used to generate personalised AI replies.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone number (SMS alerts)</label>
-              <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="+1 555 000 0000" />
+              <input type="tel" autoComplete="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className={inputClass} placeholder="+1 555 000 0000" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-              <input type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="America/New_York" />
+              <input type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={inputClass} placeholder="America/New_York" />
             </div>
-            <button type="submit" disabled={savingProfile} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={savingProfile} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]">
               {savingProfile ? 'Saving…' : 'Save profile'}
             </button>
           </form>
@@ -180,10 +181,14 @@ export default function Settings() {
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddKeyword(); }}}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500`}
               placeholder="e.g. lawn mowing"
             />
-            <button onClick={handleAddKeyword} disabled={savingKeyword || !keywordInput.trim()} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            <button
+              onClick={handleAddKeyword}
+              disabled={savingKeyword || !keywordInput.trim()}
+              className="bg-orange-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors shrink-0 min-h-[44px]"
+            >
               Add
             </button>
           </div>
@@ -192,9 +197,15 @@ export default function Settings() {
           ) : (
             <div className="flex flex-wrap gap-2">
               {keywords.map((kw) => (
-                <span key={kw.id} className="flex items-center gap-1 bg-blue-50 text-blue-700 text-sm px-3 py-1 rounded-full border border-blue-200">
+                <span key={kw.id} className="flex items-center gap-1 bg-orange-50 text-orange-700 text-sm px-3 py-1.5 rounded-full border border-orange-200">
                   {kw.keyword}
-                  <button onClick={() => handleDeleteKeyword(kw.id)} className="text-blue-400 hover:text-red-500 ml-1 leading-none transition-colors">×</button>
+                  <button
+                    onClick={() => handleDeleteKeyword(kw.id)}
+                    className="text-orange-400 hover:text-red-500 ml-1 leading-none transition-colors p-0.5"
+                    aria-label={`Remove ${kw.keyword}`}
+                  >
+                    ×
+                  </button>
                 </span>
               ))}
             </div>
@@ -205,10 +216,14 @@ export default function Settings() {
         <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4">Facebook groups</h2>
           <div className="space-y-2 mb-4">
-            <input type="url" value={groupUrl} onChange={(e) => setGroupUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://www.facebook.com/groups/..." />
+            <input type="url" value={groupUrl} onChange={(e) => setGroupUrl(e.target.value)} className={inputClass} placeholder="https://www.facebook.com/groups/..." />
             <div className="flex gap-2">
-              <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Group name (optional)" />
-              <button onClick={handleAddGroup} disabled={savingGroup || !groupUrl.trim()} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className={`flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500`} placeholder="Group name (optional)" />
+              <button
+                onClick={handleAddGroup}
+                disabled={savingGroup || !groupUrl.trim()}
+                className="bg-orange-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors shrink-0 min-h-[44px]"
+              >
                 Add
               </button>
             </div>
@@ -218,12 +233,17 @@ export default function Settings() {
           ) : (
             <ul className="space-y-2">
               {groups.map((g) => (
-                <li key={g.id} className="flex items-center justify-between bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-200">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{g.group_name || 'Unnamed group'}</p>
-                    <p className="text-xs text-gray-400 truncate max-w-xs">{g.facebook_group_url}</p>
+                <li key={g.id} className="flex items-center justify-between gap-3 bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-200">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{g.group_name || 'Unnamed group'}</p>
+                    <p className="text-xs text-gray-400 truncate">{g.facebook_group_url}</p>
                   </div>
-                  <button onClick={() => handleDeleteGroup(g.id)} className="text-red-400 hover:text-red-600 text-sm ml-4 shrink-0 transition-colors">Remove</button>
+                  <button
+                    onClick={() => handleDeleteGroup(g.id)}
+                    className="text-red-400 hover:text-red-600 text-sm shrink-0 transition-colors px-2 py-1.5 rounded"
+                  >
+                    Remove
+                  </button>
                 </li>
               ))}
             </ul>

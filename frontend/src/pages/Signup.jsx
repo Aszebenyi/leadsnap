@@ -82,7 +82,7 @@ export default function Signup() {
             type="button"
             onClick={handleGoogleSignup}
             disabled={googleLoading || loading || !!success}
-            className="w-full flex items-center justify-center gap-2.5 bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2.5 bg-white border border-gray-200 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
             style={{ borderWidth: '1.5px' }}
           >
             {googleLoading ? (
@@ -108,7 +108,7 @@ export default function Signup() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 py-2.5"
                 placeholder="you@example.com"
               />
             </div>
@@ -121,7 +121,7 @@ export default function Signup() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 py-2.5"
                 placeholder="At least 8 characters"
               />
             </div>
@@ -129,7 +129,7 @@ export default function Signup() {
             <button
               type="submit"
               disabled={loading || googleLoading || !!success}
-              className="w-full bg-orange-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              className="w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Creating account…' : 'Create account'}
             </button>

@@ -52,6 +52,8 @@ const finalWebsiteUrl  = document.getElementById('final-website-url');
 
 // Step 5
 const aiTextarea       = document.getElementById('ai-description');
+const step5AiStatus    = document.getElementById('step5-ai-status');
+const step5Error       = document.getElementById('step5-error');
 
 // Step 6
 const phoneInput       = document.getElementById('phone-input');
@@ -69,10 +71,11 @@ function goTo(step) {
   });
   currentStep = step;
 
-  // Pre-fill Step 5 textarea from website extraction result
-  if (step === 5 && extractedDescription && !aiTextarea.value) {
-    aiTextarea.value = extractedDescription;
+  // Step 5: auto-generate ideal-lead description via Claude
+  if (step === 5 && !aiTextarea.value.trim()) {
+    autoSuggestDescription();
   }
+
   // Pre-fill Step 4 website URL field if already extracted
   if (step === 4 && extractedWebsiteUrl && !finalWebsiteUrl.value) {
     finalWebsiteUrl.value = extractedWebsiteUrl;
@@ -395,8 +398,21 @@ document.getElementById('skip-4').addEventListener('click', () => goTo(5));
 // ── Step 5: AI Description ────────────────────────────────────────────────────
 
 document.getElementById('btn-step5-back').addEventListener('click', () => goTo(4));
-document.getElementById('btn-step5-next').addEventListener('click', () => goTo(6));
-document.getElementById('skip-5').addEventListener('click', () => goTo(6));
+
+document.getElementById('btn-step5-next').addEventListener('click', () => {
+  step5Error.style.display = 'none';
+  if (!aiTextarea.value.trim()) {
+    step5Error.style.display = 'block';
+    aiTextarea.focus();
+    return;
+  }
+  goTo(6);
+});
+
+// Clear the validation error as soon as the user starts typing
+aiTextarea.addEventListener('input', () => {
+  if (aiTextarea.value.trim()) step5Error.style.display = 'none';
+});
 
 // ── Step 6: Phone + Finish ────────────────────────────────────────────────────
 
@@ -466,6 +482,59 @@ async function finishOnboarding() {
   }
 }
 
+// ── Step 5: Auto-suggest ideal-lead description ───────────────────────────────
+
+async function autoSuggestDescription() {
+  const hasDescription = extractedDescription.trim().length > 0;
+  const hasKeywords    = keywords.length > 0;
+
+  // Case C: nothing to work from → show a rich guided placeholder, no API call
+  if (!hasDescription && !hasKeywords) {
+    setStep5Status('');
+    return;
+  }
+
+  // Cases A & B: call Claude via backend
+  setStep5Status('loading', 'Generating a description based on your info…');
+
+  try {
+    const token = await getAuthToken();
+    if (!token) throw new Error('Not signed in');
+
+    const suggestion = await callSuggestDescription(
+      token,
+      hasDescription ? extractedDescription : '',
+      keywords,
+    );
+
+    aiTextarea.value = suggestion;
+
+    const source = hasDescription
+      ? 'Pre-filled from your website + keywords — edit freely.'
+      : 'Suggested from your keywords — edit freely.';
+
+    setStep5Status('done', source);
+  } catch (err) {
+    // Soft-fail: don't block the user, just clear the status
+    console.warn('[LeadSnap] suggest-description failed:', err.message);
+    setStep5Status('');
+  }
+}
+
+function setStep5Status(type, text = '') {
+  if (!type || !text) {
+    step5AiStatus.style.display = 'none';
+    step5AiStatus.innerHTML     = '';
+    return;
+  }
+  step5AiStatus.style.display = 'flex';
+  if (type === 'loading') {
+    step5AiStatus.innerHTML = `<div class="spinner spinner-sm" style="width:14px;height:14px;border-width:2px;"></div><span>${escHtml(text)}</span>`;
+  } else {
+    step5AiStatus.innerHTML = `<span class="step5-ai-note">✦ ${escHtml(text)}</span>`;
+  }
+}
+
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 async function getAuthToken() {
@@ -485,6 +554,20 @@ async function callExtractWebsite(token, url) {
     throw new Error(body.error || `Server error ${res.status}`);
   }
   return res.json();
+}
+
+async function callSuggestDescription(token, serviceDescription, kwList) {
+  const res = await fetch('https://leadsnap-backend-production.up.railway.app/api/profile/suggest-description', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ service_description: serviceDescription, keywords: kwList }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error ${res.status}`);
+  }
+  const { suggestion } = await res.json();
+  return suggestion;
 }
 
 async function callUpdateProfile(token, updates) {

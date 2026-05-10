@@ -85,43 +85,45 @@ export default function Privacy() {
 
         <Section title="3. Third-Party Services">
           <p>LeadSnap relies on the following sub-processors, each with their own privacy practices:</p>
-          <table>
-            <thead>
-              <tr><th>Service</th><th>Purpose</th><th>Privacy Policy</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Supabase</strong></td>
-                <td>Database, authentication, and file storage</td>
-                <td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">supabase.com/privacy</a></td>
-              </tr>
-              <tr>
-                <td><strong>Stripe</strong></td>
-                <td>Payment processing and subscription billing</td>
-                <td><a href="https://stripe.com/privacy" target="_blank" rel="noreferrer">stripe.com/privacy</a></td>
-              </tr>
-              <tr>
-                <td><strong>Twilio</strong></td>
-                <td>SMS lead alert delivery</td>
-                <td><a href="https://www.twilio.com/en-us/legal/privacy" target="_blank" rel="noreferrer">twilio.com/legal/privacy</a></td>
-              </tr>
-              <tr>
-                <td><strong>Anthropic</strong></td>
-                <td>AI lead scoring and reply generation</td>
-                <td><a href="https://www.anthropic.com/privacy" target="_blank" rel="noreferrer">anthropic.com/privacy</a></td>
-              </tr>
-              <tr>
-                <td><strong>Facebook (Meta)</strong></td>
-                <td>Source of group post data, accessed via your browser session</td>
-                <td><a href="https://www.facebook.com/privacy/policy/" target="_blank" rel="noreferrer">facebook.com/privacy/policy</a></td>
-              </tr>
-              <tr>
-                <td><strong>Railway</strong></td>
-                <td>Backend API hosting</td>
-                <td><a href="https://railway.app/legal/privacy" target="_blank" rel="noreferrer">railway.app/legal/privacy</a></td>
-              </tr>
-            </tbody>
-          </table>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '12px 0 20px' }}>
+            <table style={{ margin: 0 }}>
+              <thead>
+                <tr><th>Service</th><th>Purpose</th><th>Privacy Policy</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Supabase</strong></td>
+                  <td>Database, authentication, and file storage</td>
+                  <td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">supabase.com/privacy</a></td>
+                </tr>
+                <tr>
+                  <td><strong>Stripe</strong></td>
+                  <td>Payment processing and subscription billing</td>
+                  <td><a href="https://stripe.com/privacy" target="_blank" rel="noreferrer">stripe.com/privacy</a></td>
+                </tr>
+                <tr>
+                  <td><strong>Twilio</strong></td>
+                  <td>SMS lead alert delivery</td>
+                  <td><a href="https://www.twilio.com/en-us/legal/privacy" target="_blank" rel="noreferrer">twilio.com/legal/privacy</a></td>
+                </tr>
+                <tr>
+                  <td><strong>Anthropic</strong></td>
+                  <td>AI lead scoring and reply generation</td>
+                  <td><a href="https://www.anthropic.com/privacy" target="_blank" rel="noreferrer">anthropic.com/privacy</a></td>
+                </tr>
+                <tr>
+                  <td><strong>Facebook (Meta)</strong></td>
+                  <td>Source of group post data, accessed via your browser session</td>
+                  <td><a href="https://www.facebook.com/privacy/policy/" target="_blank" rel="noreferrer">facebook.com/privacy/policy</a></td>
+                </tr>
+                <tr>
+                  <td><strong>Railway</strong></td>
+                  <td>Backend API hosting</td>
+                  <td><a href="https://railway.app/legal/privacy" target="_blank" rel="noreferrer">railway.app/legal/privacy</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <p>Post text is transmitted to Anthropic's API for scoring and reply generation. We send only the post content and your business description — no personally identifiable information about the Facebook poster is included beyond what appears in the post itself.</p>
         </Section>
 

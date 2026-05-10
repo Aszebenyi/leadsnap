@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import supabase from '../lib/supabase.js';
-import { extractBusinessInfo } from '../services/claude.js';
+import { extractBusinessInfo, suggestLeadDescription } from '../services/claude.js';
 
 const router = Router();
 
@@ -93,6 +93,24 @@ router.post('/extract-website', requireAuth, async (req, res, next) => {
 
     const result = await extractBusinessInfo(text, url);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/profile/suggest-description
+// Generates a 2-sentence ideal-lead description using Claude.
+// Body: { service_description?: string, keywords?: string[] }
+router.post('/suggest-description', requireAuth, async (req, res, next) => {
+  try {
+    const { service_description = '', keywords = [] } = req.body;
+
+    if (!service_description.trim() && !keywords.length) {
+      return res.status(400).json({ error: 'Provide a service_description or at least one keyword' });
+    }
+
+    const suggestion = await suggestLeadDescription(service_description, keywords);
+    res.json({ suggestion });
   } catch (err) {
     next(err);
   }

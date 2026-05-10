@@ -31,20 +31,22 @@ export default function Dashboard() {
         </div>
 
         {/* Status filter tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-          {STATUS_TABS.map(({ label, value }) => (
-            <button
-              key={label}
-              onClick={() => setStatusFilter(value)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                statusFilter === value
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="mb-6 overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-max min-w-full sm:w-fit sm:min-w-0">
+            {STATUS_TABS.map(({ label, value }) => (
+              <button
+                key={label}
+                onClick={() => setStatusFilter(value)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                  statusFilter === value
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Content */}

@@ -139,12 +139,21 @@
       <div class="step-title">Describe Your Ideal Lead</div>
       <p class="step-desc">Claude AI reads every Facebook post through this lens — posts that match get scored higher and are more likely to trigger an alert.</p>
 
+      <!-- AI suggestion status (loading / source note) -->
+      <div id="step5-ai-status" class="step5-ai-status" style="display:none;"></div>
+
       <textarea
         id="ai-description"
         class="ai-textarea"
-        placeholder="e.g. Anyone looking for a dog boarder, pet sitter, or someone to walk their dog while they travel or go on holiday"
+        placeholder="e.g. I run a dog boarding service in Austin. My ideal customer is someone looking for a reliable place to leave their dog while they travel or go on holiday."
         maxlength="500"
       ></textarea>
+
+      <!-- Validation error -->
+      <div id="step5-error" class="step5-error" style="display:none;">
+        Please describe your ideal lead before continuing — this helps Claude score posts accurately.
+      </div>
+
       <p class="ai-hint">
         <strong>Be specific.</strong> Mention the type of customer, the service they need, and any urgency signals (e.g. "leaving next week", "asap", "emergency").
       </p>
@@ -153,7 +162,6 @@
         <button id="btn-step5-back" class="btn btn-secondary">← Back</button>
         <button id="btn-step5-next" class="btn btn-primary">Next →</button>
       </div>
-      <button class="skip-link" id="skip-5">Skip for now</button>
     </div>
 
     <!-- ── Step 6: Phone Number + Start Monitoring ── -->

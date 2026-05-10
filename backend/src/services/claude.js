@@ -110,6 +110,47 @@ Return the reply text only, no quotes, no explanation.`,
 }
 
 /**
+ * Generate a 2-sentence ideal-lead description for Step 5 of onboarding.
+ *
+ * Two modes:
+ *   - serviceDescription + keywords  → describe the ideal Facebook post / buyer signal
+ *   - keywords only                  → describe what the business does and who their ideal customer is
+ *
+ * @param {string} serviceDescription - extracted from website (may be empty string)
+ * @param {string[]} keywords         - Step 3 keywords (may be empty array)
+ * @returns {string} plain-text suggestion (2 sentences)
+ */
+export async function suggestLeadDescription(serviceDescription, keywords) {
+  const hasDescription = serviceDescription && serviceDescription.trim().length > 0;
+  const hasKeywords    = keywords && keywords.length > 0;
+
+  if (!hasDescription && !hasKeywords) {
+    throw new Error('Provide a service description or at least one keyword');
+  }
+
+  let system, userContent;
+
+  if (hasDescription) {
+    system = `Based on a business description and keywords, write exactly 2 sentences describing their ideal Facebook group lead. Be specific about buyer intent signals — what would someone post that shows they're ready to hire this business right now? Return the description text only, no quotes, no explanation.`;
+    userContent = `Business description: ${serviceDescription}${hasKeywords ? `\nKeywords: ${keywords.join(', ')}` : ''}`;
+  } else {
+    system = `Based on keywords a local service business uses to find leads on Facebook, write exactly 2 sentences: one describing what the business does, one describing what their ideal customer would post in a Facebook group. Focus on buyer intent signals. Return the description text only, no quotes, no explanation.`;
+    userContent = `Keywords: ${keywords.join(', ')}`;
+  }
+
+  const message = await getClient().messages.create({
+    model:      MODEL,
+    max_tokens: 200,
+    system,
+    messages:   [{ role: 'user', content: userContent }],
+  });
+
+  const text = message.content[0]?.text?.trim() ?? '';
+  if (!text) throw new Error('Claude returned an empty suggestion');
+  return text;
+}
+
+/**
  * Extract business info from a webpage's text content.
  * @param {string} pageText - stripped plain text from the website (max 5 000 chars)
  * @param {string} url - original URL (included for context)

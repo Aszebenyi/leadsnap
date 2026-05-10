@@ -52,12 +52,18 @@
 .ls-wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
 
 /* ── Nav ── */
+.ls-nav-wrap {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--stroke);
+}
 .ls-nav {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 22px 32px;
+  padding: 16px 32px;
   display: flex; align-items: center; justify-content: space-between;
-  position: relative; z-index: 5;
+  position: relative;
 }
 .ls-brand {
   display: flex; align-items: center; gap: 10px;
@@ -77,6 +83,45 @@
 .ls-nav-links a:hover { opacity: 1; }
 .ls-nav-cta { display: flex; align-items: center; gap: 8px; }
 .ls-nav-cta a { text-decoration: none; color: var(--ink); font-weight: 600; font-size: 14px; }
+
+/* Hamburger button — hidden on desktop */
+.ls-hamburger {
+  display: none;
+  flex-direction: column; justify-content: center; align-items: center;
+  gap: 5px; width: 40px; height: 40px; border-radius: 8px;
+  background: none; border: none; cursor: pointer; padding: 0;
+  flex-shrink: 0;
+}
+.ls-ham-bar {
+  display: block; width: 20px; height: 2px;
+  background: var(--ink); border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.ls-ham-bar--top-open { transform: translateY(7px) rotate(45deg); }
+.ls-ham-bar--mid-open { opacity: 0; }
+.ls-ham-bar--bot-open { transform: translateY(-7px) rotate(-45deg); }
+
+/* Mobile nav drawer — visibility controlled by React state (conditional render),
+   CSS just provides the visual styles */
+.ls-mobile-menu {
+  background: #fff;
+  border-bottom: 1px solid var(--stroke);
+  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+  padding: 8px 0 16px;
+}
+.ls-mobile-link {
+  display: block; padding: 13px 24px;
+  font-size: 15px; font-weight: 500; color: var(--ink-2);
+  text-decoration: none; border-bottom: 1px solid var(--stroke);
+  transition: background 0.15s;
+}
+.ls-mobile-link:last-of-type { border-bottom: none; }
+.ls-mobile-link:hover { background: #f9fafb; color: var(--ink); }
+.ls-mobile-menu-cta {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 24px 0;
+}
+.ls-mobile-menu-cta .ls-btn { width: 100%; justify-content: center; }
 
 /* ── Buttons ── */
 .ls-btn {
@@ -804,7 +849,10 @@
   .ls-plans { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
+  .ls-nav { padding: 14px 16px; }
   .ls-nav-links { display: none; }
+  .ls-nav-signin { display: none; }  /* hide Sign in — available in mobile drawer */
+  .ls-hamburger { display: flex; }
   .ls-wrap { padding: 0 16px; }
   .ls-hero { padding: 16px 16px 60px; }
   .ls-section { padding: 64px 0; }

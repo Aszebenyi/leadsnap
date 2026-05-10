@@ -58,8 +58,8 @@ export default function LeadCard({ lead, onStatusChange }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
       {/* Header row */}
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           {/* Score badge */}
           {lead.score != null && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${SCORE_COLOR(lead.score)}`}>
@@ -81,7 +81,7 @@ export default function LeadCard({ lead, onStatusChange }) {
           value={status}
           onChange={handleStatusChange}
           disabled={updating}
-          className={`text-xs font-medium px-2 py-1 rounded-md border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 ${STATUS_COLORS[status]}`}
+          className={`text-xs font-medium px-2 py-1.5 rounded-md border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400 shrink-0 ${STATUS_COLORS[status]}`}
         >
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -90,11 +90,11 @@ export default function LeadCard({ lead, onStatusChange }) {
       </div>
 
       {/* Post text */}
-      <p className="text-sm text-gray-800 leading-relaxed mb-1 whitespace-pre-wrap">{displayText}</p>
+      <p className="text-sm text-gray-800 leading-relaxed mb-1 whitespace-pre-wrap break-words">{displayText}</p>
       {isLong && (
         <button
           onClick={() => setExpanded((x) => !x)}
-          className="text-xs text-blue-500 hover:text-blue-700 mb-3"
+          className="text-xs text-orange-500 hover:text-orange-700 mb-3 py-1"
         >
           {expanded ? 'Show less' : 'Show more'}
         </button>
@@ -104,7 +104,7 @@ export default function LeadCard({ lead, onStatusChange }) {
       {lead.matched_keywords?.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-3 mt-2">
           {lead.matched_keywords.map((kw) => (
-            <span key={kw} className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
+            <span key={kw} className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100">
               {kw}
             </span>
           ))}
@@ -118,7 +118,7 @@ export default function LeadCard({ lead, onStatusChange }) {
             <span className="text-xs font-medium text-gray-500">Suggested reply</span>
             <button
               onClick={copyReply}
-              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+              className="text-xs text-orange-500 hover:text-orange-700 font-medium px-2 py-1"
             >
               {copied ? 'Copied!' : 'Copy'}
             </button>
@@ -134,7 +134,7 @@ export default function LeadCard({ lead, onStatusChange }) {
             href={lead.post_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-500 hover:text-blue-700"
+            className="text-xs text-orange-500 hover:text-orange-700 py-1"
           >
             View post →
           </a>

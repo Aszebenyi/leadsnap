@@ -108,11 +108,11 @@ export default function Onboarding() {
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
-          <span className="font-bold text-blue-600 text-xl">LeadSnap</span>
+          <span className="font-bold text-orange-500 text-xl">LeadSnap</span>
           <h1 className="text-2xl font-bold text-gray-900 mt-4">Set up your account</h1>
           <p className="text-gray-500 text-sm mt-1">Step {step + 1} of {STEPS.length}</p>
           <div className="mt-4 h-1.5 bg-gray-200 rounded-full">
-            <div className="h-1.5 bg-blue-600 rounded-full transition-all" style={{ width: `${progress}%` }} />
+            <div className="h-1.5 bg-orange-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
         </div>
 
@@ -134,7 +134,7 @@ export default function Onboarding() {
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="John's Lawn Care"
                 />
               </div>
@@ -145,7 +145,7 @@ export default function Onboarding() {
                   onChange={(e) => setServiceDescription(e.target.value)}
                   required
                   rows={3}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                   placeholder="I offer lawn mowing, edging, and yard clean-up in the Springfield area."
                 />
                 <p className="text-xs text-gray-400 mt-1">This is used to generate personalised AI replies for you.</p>
@@ -157,11 +157,11 @@ export default function Onboarding() {
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="+1 555 000 0000"
                 />
               </div>
-              <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={saving} className="w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">
                 {saving ? 'Saving…' : 'Continue'}
               </button>
             </form>
@@ -178,24 +178,24 @@ export default function Onboarding() {
                   value={keywordInput}
                   onChange={(e) => setKeywordInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addKeywordLocal(); }}}
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="lawn mowing"
                 />
-                <button type="button" onClick={addKeywordLocal} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                <button type="button" onClick={addKeywordLocal} className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors shrink-0 min-h-[44px]">
                   Add
                 </button>
               </div>
               {keywords.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {keywords.map((kw) => (
-                    <span key={kw} className="flex items-center gap-1 bg-blue-50 text-blue-700 text-sm px-3 py-1 rounded-full border border-blue-200">
+                    <span key={kw} className="flex items-center gap-1 bg-orange-50 text-orange-700 text-sm px-3 py-1 rounded-full border border-orange-200">
                       {kw}
-                      <button type="button" onClick={() => removeKeyword(kw)} className="text-blue-400 hover:text-blue-700 ml-1 leading-none">×</button>
+                      <button type="button" onClick={() => removeKeyword(kw)} className="text-orange-400 hover:text-orange-700 ml-1 leading-none">×</button>
                     </span>
                   ))}
                 </div>
               )}
-              <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={saving} className="w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">
                 {saving ? 'Saving…' : 'Continue'}
               </button>
             </form>
@@ -211,31 +211,31 @@ export default function Onboarding() {
                   type="url"
                   value={groupUrl}
                   onChange={(e) => setGroupUrl(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="https://www.facebook.com/groups/springfield-community"
                 />
                 <input
                   type="text"
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Group name (optional)"
                 />
-                <button type="button" onClick={addGroupLocal} disabled={!groupUrl.trim()} className="w-full bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-40 transition-colors">
+                <button type="button" onClick={addGroupLocal} disabled={!groupUrl.trim()} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-40 transition-colors">
                   Add group
                 </button>
               </div>
               {groups.length > 0 && (
                 <ul className="space-y-2">
                   {groups.map((g) => (
-                    <li key={g.url} className="flex items-center justify-between text-sm bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-                      <span className="text-gray-700 truncate">{g.name}</span>
-                      <button type="button" onClick={() => removeGroup(g.url)} className="text-red-400 hover:text-red-600 ml-4 shrink-0">Remove</button>
+                    <li key={g.url} className="flex items-center justify-between gap-3 text-sm bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-200">
+                      <span className="text-gray-700 truncate min-w-0">{g.name}</span>
+                      <button type="button" onClick={() => removeGroup(g.url)} className="text-red-400 hover:text-red-600 shrink-0 px-2 py-1">Remove</button>
                     </li>
                   ))}
                 </ul>
               )}
-              <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              <button type="submit" disabled={saving} className="w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors">
                 {saving ? 'Saving…' : groups.length ? 'Save & continue' : 'Skip for now'}
               </button>
             </form>
@@ -251,7 +251,7 @@ export default function Onboarding() {
               </p>
               <a
                 href="#"
-                className="block w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                className="block w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
               >
                 Install LeadSnap for Chrome
               </a>
