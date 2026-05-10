@@ -1,5 +1,5 @@
 // Lightweight Supabase Auth REST wrapper — no SDK needed.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, API_URL } from './config.js';
 
 const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
 
@@ -78,30 +78,50 @@ async function generateCodeChallenge(verifier) {
 }
 
 /**
- * Sign in with Google via Supabase OAuth using PKCE + chrome.identity.
+ * Sign in with Google via PKCE + chrome.identity, then exchange into a Supabase session.
  *
- * Prerequisites (one-time setup):
- *   • Supabase dashboard → Auth → URL Configuration → Redirect URLs →
- *     add the URL returned by chrome.identity.getRedirectURL()
- *   • Google Cloud Console → OAuth 2.0 → Authorized redirect URIs →
- *     add the same URL (Supabase may handle this automatically)
+ * Why we bypass Supabase's /authorize proxy:
+ *   Supabase's proxy sets redirect_uri to its own server-side callback URL. When a
+ *   custom client_id is supplied, Google validates that callback URL against the URIs
+ *   registered for that client — they don't match, causing redirect_uri_mismatch.
+ *   Going directly to Google lets us use chrome.identity.getRedirectURL() as the
+ *   redirect_uri, which IS registered for the Chrome extension OAuth client.
+ *
+ * Flow:
+ *   1. Google PKCE auth code → chrome.identity.launchWebAuthFlow
+ *   2. Exchange code + verifier with Google → { id_token, access_token }
+ *   3. Exchange id_token with Supabase grant_type=id_token → Supabase session
+ *
+ * Prerequisites (one-time setup in Google Cloud Console):
+ *   • OAuth client type: Web application (or Chrome App)
+ *   • Authorized redirect URIs: add chrome.identity.getRedirectURL() value
+ *     (logged to console on first sign-in attempt so you can copy it)
  *
  * Returns { access_token, refresh_token, user }
  */
-export async function signInWithGoogle() {
+export async function signInWithGoogle(clientId) {
   const codeVerifier  = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const redirectUri   = chrome.identity.getRedirectURL();
 
-  const authUrl = `${AUTH_URL}/authorize?` + new URLSearchParams({
-    provider:              'google',
-    redirect_to:           redirectUri,
+  console.log('%c[LeadSnap] Add this EXACT string to Google Cloud Console → Credentials → OAuth client → Authorized redirect URIs:', 'font-weight:bold;color:orange');
+  console.log(redirectUri);
+
+  // Step 1 — build the Google OAuth URL directly, using the chromiumapp redirect URI
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+    client_id:             clientId,
+    redirect_uri:          redirectUri,
+    response_type:         'code',
+    scope:                 'openid email profile',
     code_challenge:        codeChallenge,
-    code_challenge_method: 's256',
-    scopes:                'email profile',
+    code_challenge_method: 'S256',
+    access_type:           'offline',
+    prompt:                'select_account',
   }).toString();
 
-  // Open the Google sign-in popup via Chrome's identity API
+  console.log('[LeadSnap] Full OAuth URL:', authUrl);
+  console.log('[LeadSnap] redirect_uri param (decoded):', new URLSearchParams(new URL(authUrl).search).get('redirect_uri'));
+
   const callbackUrl = await new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
       if (chrome.runtime.lastError) {
@@ -114,17 +134,18 @@ export async function signInWithGoogle() {
     });
   });
 
-  // Extract the one-time auth code from the redirect URL
   const code = new URL(callbackUrl).searchParams.get('code');
   if (!code) throw new Error('No auth code returned — please try again.');
 
-  // Exchange the code + verifier for Supabase session tokens
-  const res = await fetch(`${AUTH_URL}/token?grant_type=pkce`, {
+  // Step 2 — send the code + PKCE verifier to our backend, which holds the
+  // Google client_secret and completes the exchange server-side, then signs
+  // the user into Supabase and returns the session.
+  const res = await fetch(`${API_URL}/api/auth/google-exchange`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ auth_code: code, code_verifier: codeVerifier }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, code_verifier: codeVerifier, redirect_uri: redirectUri }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error_description || 'OAuth token exchange failed.');
+  if (!res.ok) throw new Error(data.error || 'Sign-in failed — please try again.');
   return data; // { access_token, refresh_token, user }
 }

@@ -1,6 +1,5 @@
 // All fetch calls to the LeadSnap backend API
-
-const API_URL = 'https://leadsnap-backend-production.up.railway.app';
+import { API_URL } from './config.js';
 
 async function request(path, options = {}, token = null) {
   const headers = {

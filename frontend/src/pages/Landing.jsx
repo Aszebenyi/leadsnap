@@ -653,8 +653,8 @@ export default function Landing() {
           </a>
           <div className="links">
             <Link to="/privacy">Privacy Policy</Link>
-            <a href="#">Terms</a>
-            <a href="#">Support</a>
+            <Link to="/terms">Terms</Link>
+            <a href={`mailto:legal@leadsnap.app`}>Support</a>
           </div>
           <div>© {new Date().getFullYear()} LeadSnap</div>
         </div>

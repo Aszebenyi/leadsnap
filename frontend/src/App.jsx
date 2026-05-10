@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 
 import Landing    from './pages/Landing';
 import Privacy    from './pages/Privacy';
+import Terms      from './pages/Terms';
 import Login      from './pages/Login';
 import Signup     from './pages/Signup';
 import Onboarding from './pages/Onboarding';
@@ -29,6 +30,7 @@ export default function App() {
         {/* Public */}
         <Route path="/"        element={<Landing />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms"   element={<Terms />} />
         <Route path="/login"   element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup"  element={<PublicRoute><Signup /></PublicRoute>} />
 

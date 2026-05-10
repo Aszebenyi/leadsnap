@@ -32,7 +32,9 @@
       "Bash(gunzip -f /tmp/design.gz)",
       "Read(//tmp/**)",
       "Bash(mkdir -p design_extract)",
-      "Bash(tar -xf design -C design_extract)"
+      "Bash(tar -xf design -C design_extract)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"exit:$?\")"
     ]
   }
 }

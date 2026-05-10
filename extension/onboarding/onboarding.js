@@ -1,4 +1,5 @@
 // LeadSnap onboarding wizard — 6-step flow (ES module)
+import { API_URL } from '../utils/config.js';
 
 const MAX_GROUPS   = 25;
 const TOTAL_STEPS  = 6;
@@ -544,7 +545,7 @@ async function getAuthToken() {
 }
 
 async function callExtractWebsite(token, url) {
-  const res = await fetch('https://leadsnap-backend-production.up.railway.app/api/profile/extract-website', {
+  const res = await fetch(`${API_URL}/api/profile/extract-website`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ url }),
@@ -557,7 +558,7 @@ async function callExtractWebsite(token, url) {
 }
 
 async function callSuggestDescription(token, serviceDescription, kwList) {
-  const res = await fetch('https://leadsnap-backend-production.up.railway.app/api/profile/suggest-description', {
+  const res = await fetch(`${API_URL}/api/profile/suggest-description`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ service_description: serviceDescription, keywords: kwList }),
@@ -571,7 +572,7 @@ async function callSuggestDescription(token, serviceDescription, kwList) {
 }
 
 async function callUpdateProfile(token, updates) {
-  const res = await fetch('https://leadsnap-backend-production.up.railway.app/api/profile', {
+  const res = await fetch(`${API_URL}/api/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(updates),

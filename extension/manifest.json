@@ -52,6 +52,7 @@
 
   "host_permissions": [
     "https://www.facebook.com/*",
-    "https://*.supabase.co/*"
+    "https://*.supabase.co/*",
+    "https://oauth2.googleapis.com/*"
   ]
 }

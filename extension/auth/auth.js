@@ -1,5 +1,6 @@
 // LeadSnap extension auth — Google OAuth only
 import { signInWithGoogle } from '../utils/supabase-auth.js';
+import { GOOGLE_CLIENT_ID } from '../utils/config.js';
 
 const btnGoogle  = document.getElementById('btn-google');
 const errorMsg   = document.getElementById('error-msg');
@@ -12,7 +13,7 @@ btnGoogle.addEventListener('click', async () => {
   hideMessages();
 
   try {
-    const session = await signInWithGoogle();
+    const session = await signInWithGoogle(GOOGLE_CLIENT_ID);
     await storeSession(session);
 
     const complete = await new Promise((r) =>

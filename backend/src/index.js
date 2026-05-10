@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 
 process.on('uncaughtException', (err) => {
   console.error('[CRASH] Uncaught exception:', err);
@@ -9,7 +11,6 @@ process.on('unhandledRejection', (reason) => {
   console.error('[CRASH] Unhandled rejection:', reason);
   process.exit(1);
 });
-import cors from 'cors';
 
 import authRoutes from './routes/auth.js';
 import leadsRoutes from './routes/leads.js';
@@ -20,6 +21,37 @@ import billingRoutes from './routes/billing.js';
 
 const app = express();
 const PORT = process.env.PORT;
+
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+
+// General: 100 requests per 15 minutes per IP.
+// Skip the Stripe webhook — it's called by Stripe servers, not users.
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/api/billing/webhook'),
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+// Lead ingest: 60 requests per hour per IP.
+const ingestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many lead submissions, please try again later.' },
+});
+
+// Billing checkout: 10 requests per hour per IP.
+const checkoutLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many checkout requests, please try again later.' },
+});
 
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -40,6 +72,13 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
+
+// Apply tighter limiters to specific high-value endpoints
+app.use('/api/leads/ingest', ingestLimiter);
+app.use('/api/billing/checkout', checkoutLimiter);
 
 // Stripe webhook needs raw body before JSON parser
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));

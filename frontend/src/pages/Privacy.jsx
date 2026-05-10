@@ -191,7 +191,10 @@ export default function Privacy() {
 
       {/* Footer */}
       <footer style={{ borderTop: '1px solid #e5e7eb', padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-        © {new Date().getFullYear()} LeadSnap · <Link to="/privacy" style={{ color: '#9ca3af' }}>Privacy Policy</Link>
+        © {new Date().getFullYear()} LeadSnap ·{' '}
+        <Link to="/privacy" style={{ color: '#9ca3af' }}>Privacy Policy</Link>
+        {' · '}
+        <Link to="/terms" style={{ color: '#9ca3af' }}>Terms of Service</Link>
       </footer>
     </div>
   );
