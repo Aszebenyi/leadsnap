@@ -38,7 +38,7 @@
     <!-- ── Step 1: Connect Facebook ── -->
     <div class="step-panel visible" id="step-1">
       <div class="step-title">Connect Facebook</div>
-      <p class="step-desc">LeadSnap needs access to your Facebook groups to start monitoring for leads.</p>
+      <p class="step-desc">Sign in with Facebook so LeadSnap can fetch your groups. We never post on your behalf.</p>
 
       <button id="btn-connect-fb" class="btn btn-facebook">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
@@ -47,7 +47,7 @@
         Continue with Facebook
       </button>
 
-      <p class="fb-connect-note">LeadSnap will load your groups automatically. We never post on your behalf.</p>
+      <p class="fb-connect-note">A Facebook login window will open. Your groups are fetched directly — we never post, like, or read messages.</p>
 
       <div id="fb-status" class="fb-status"></div>
 
@@ -64,11 +64,15 @@
 
       <div class="groups-toolbar">
         <span id="groups-counter" class="groups-counter">0/25 selected</span>
-        <button id="btn-reload-groups" class="btn btn-sm btn-secondary">Reload groups</button>
+        <button id="btn-reload-groups" class="btn btn-sm btn-secondary">Load my groups</button>
       </div>
       <div id="groups-msg" class="groups-msg"></div>
+      <div id="groups-progress-wrap" class="groups-progress-wrap" style="display:none">
+        <div class="groups-progress-bar"></div>
+        <span id="groups-progress-label" class="groups-progress-label">Scanning…</span>
+      </div>
       <div id="groups-list" class="checkbox-list">
-        <div class="empty-state">No groups loaded yet.</div>
+        <div class="empty-state">No groups added yet.</div>
       </div>
 
       <div class="action-row">
@@ -77,29 +81,8 @@
       </div>
     </div>
 
-    <!-- ── Step 3: Keywords ── -->
+    <!-- ── Step 3: Website Extractor + Toggle ── -->
     <div class="step-panel" id="step-3">
-      <div class="step-title">Add Your Keywords</div>
-      <p class="step-desc">Words and phrases that signal someone needs your service. Press Enter or click Add to save each one.</p>
-
-      <div class="add-form">
-        <input type="text" id="keyword-input" placeholder="e.g. lawn mowing" maxlength="60" />
-        <button id="btn-add-kw" class="btn btn-sm btn-primary">Add</button>
-      </div>
-      <p class="chips-hint">Your keywords:</p>
-      <div class="keyword-chips" id="keyword-chips">
-        <span style="color:#9ca3af;font-size:12px">None yet</span>
-      </div>
-
-      <div class="action-row">
-        <button id="btn-step3-back" class="btn btn-secondary">← Back</button>
-        <button id="btn-step3-next" class="btn btn-primary">Next →</button>
-      </div>
-      <button class="skip-link" id="skip-3">Skip for now</button>
-    </div>
-
-    <!-- ── Step 4: Website Extractor + Toggle ── -->
-    <div class="step-panel" id="step-4">
       <div class="step-title">Extract From Your Website</div>
       <p class="step-desc">Enter your website URL and we'll auto-fill your business info and suggest keywords. Completely optional.</p>
 
@@ -118,7 +101,7 @@
         <div class="suggested-chips" id="suggested-chips"></div>
       </div>
 
-      <!-- Include website toggle (consolidated from old Step 7) -->
+      <!-- Include website toggle -->
       <div class="toggle-row">
         <div>
           <div class="toggle-label">Include website link in AI replies</div>
@@ -130,18 +113,32 @@
         </label>
       </div>
 
-      <input
-        type="url"
-        id="final-website-url"
-        class="website-url-input"
-        placeholder="https://yourbusiness.com (optional)"
-      />
+      <div class="action-row">
+        <button id="btn-step3-back" class="btn btn-secondary">← Back</button>
+        <button id="btn-step3-next" class="btn btn-primary">Next →</button>
+      </div>
+      <button class="skip-link" id="skip-3">Skip this step</button>
+    </div>
+
+    <!-- ── Step 4: Keywords ── -->
+    <div class="step-panel" id="step-4">
+      <div class="step-title">Add Your Keywords</div>
+      <p class="step-desc">Words and phrases that signal someone needs your service. Press Enter or click Add to save each one.</p>
+
+      <div class="add-form">
+        <input type="text" id="keyword-input" placeholder="e.g. lawn mowing" maxlength="60" />
+        <button id="btn-add-kw" class="btn btn-sm btn-primary">Add</button>
+      </div>
+      <p class="chips-hint">Your keywords:</p>
+      <div class="keyword-chips" id="keyword-chips">
+        <span style="color:#9ca3af;font-size:12px">None yet</span>
+      </div>
 
       <div class="action-row">
         <button id="btn-step4-back" class="btn btn-secondary">← Back</button>
         <button id="btn-step4-next" class="btn btn-primary">Next →</button>
       </div>
-      <button class="skip-link" id="skip-4">Skip this step</button>
+      <button class="skip-link" id="skip-4">Skip for now</button>
     </div>
 
     <!-- ── Step 5: AI Description ── -->
@@ -176,12 +173,41 @@
 
     <!-- ── Step 6: Phone Number + Start Monitoring ── -->
     <div class="step-panel" id="step-6">
-      <div class="step-title">Phone Number for SMS Alerts</div>
-      <p class="step-desc">We'll text you the moment a matching post is found — with an AI-generated reply ready to copy.</p>
+      <div class="step-title">Get Instant Alerts</div>
+      <p class="step-desc">We'll message you the moment a matching post is found — with an AI-generated reply ready to copy.</p>
+
+      <div class="alert-channel-row">
+        <button class="alert-channel-btn active" id="channel-sms" data-channel="sms">
+          💬 SMS
+        </button>
+        <button class="alert-channel-btn" id="channel-whatsapp" data-channel="whatsapp">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          WhatsApp
+        </button>
+      </div>
 
       <div class="phone-input-wrap">
-        <input type="tel" id="phone-input" placeholder="+1 (555) 000-0000" />
-        <p class="phone-hint">Any country. Standard message rates apply.</p>
+        <div class="phone-row">
+          <select id="phone-country" class="phone-country-select">
+            <option value="+1">🇺🇸 US +1</option>
+            <option value="+1">🇨🇦 CA +1</option>
+            <option value="+44">🇬🇧 UK +44</option>
+            <option value="+61">🇦🇺 AU +61</option>
+            <option value="+64">🇳🇿 NZ +64</option>
+            <option value="+353">🇮🇪 IE +353</option>
+            <option value="+33">🇫🇷 FR +33</option>
+            <option value="+49">🇩🇪 DE +49</option>
+            <option value="+34">🇪🇸 ES +34</option>
+            <option value="+39">🇮🇹 IT +39</option>
+            <option value="+31">🇳🇱 NL +31</option>
+            <option value="+91">🇮🇳 IN +91</option>
+            <option value="+65">🇸🇬 SG +65</option>
+            <option value="+971">🇦🇪 AE +971</option>
+            <option value="+27">🇿🇦 ZA +27</option>
+          </select>
+          <input type="tel" id="phone-number" placeholder="400 000 000" />
+        </div>
+        <p class="phone-hint">Standard message rates apply.</p>
       </div>
 
       <div id="finish-loading" class="finish-loading">

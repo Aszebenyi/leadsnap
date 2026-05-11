@@ -136,7 +136,11 @@ router.post('/extract-website', requireAuth, async (req, res, next) => {
     const result = await extractBusinessInfo(text, url);
     res.json(result);
   } catch (err) {
-    next(err);
+    const isAuthErr = /apiKey|authToken|authentication/i.test(err.message ?? '');
+    const msg = isAuthErr
+      ? 'AI service not configured — add ANTHROPIC_API_KEY to the server environment'
+      : (err.message ?? 'Extraction failed');
+    res.status(500).json({ error: msg });
   }
 });
 

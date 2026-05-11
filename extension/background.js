@@ -3,7 +3,7 @@ import {
   getAuthToken, getRefreshToken, setSession, clearSession,
   getSelectedGroups, getKeywords, getScanningEnabled,
   getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
-  getAiDescription, getWebsiteUrl, getIncludeWebsite,
+  getAiDescription, getWebsiteUrl, getIncludeWebsite, getAlertChannel,
   isOnboardingComplete,
 } from './utils/storage.js';
 import { ingestLead, heartbeat } from './utils/api.js';
@@ -145,8 +145,7 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   }
 
   await setLastScanAt(Date.now());
-  // Notify backend so dashboard can show "extension connected" status
-  const token = await getAuthToken();
+  // Notify backend so dashboard can show "extension connected" status (token already in scope)
   if (token) heartbeat(token).catch(() => {});
   console.log(`[LeadSnap] Scan cycle complete — ${totalFound} new lead(s) submitted`);
 
@@ -370,16 +369,18 @@ async function handleLeadFound(payload) {
   if (!token) throw new Error('Not authenticated');
 
   // Read user preferences and attach to every ingest call
-  const [aiDescription, websiteUrl, includeWebsite] = await Promise.all([
+  const [aiDescription, websiteUrl, includeWebsite, alertChannel] = await Promise.all([
     getAiDescription(),
     getWebsiteUrl(),
     getIncludeWebsite(),
+    getAlertChannel(),
   ]);
 
   const lead = await ingestLead(token, {
     ...payload,
     ai_description: aiDescription || undefined,
     website_url:    includeWebsite && websiteUrl ? websiteUrl : undefined,
+    alert_channel:  alertChannel || 'sms',
     skip_sms:       payload.silent === true,
   });
 

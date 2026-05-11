@@ -171,10 +171,21 @@
         <div class="setting-row">
           <div class="setting-icon">📱</div>
           <div class="setting-body">
-            <div class="setting-label">SMS alerts</div>
+            <div class="setting-label">Alerts</div>
             <div class="setting-val" id="setting-phone-val">No phone number</div>
           </div>
           <button class="setting-action" id="btn-edit-phone">Edit →</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-icon">💬</div>
+          <div class="setting-body">
+            <div class="setting-label">Alert channel</div>
+            <div class="setting-val" id="setting-channel-val">SMS</div>
+          </div>
+          <div class="channel-toggle-row" id="channel-toggle-row">
+            <button class="channel-pill active" id="pill-sms" data-channel="sms">SMS</button>
+            <button class="channel-pill" id="pill-whatsapp" data-channel="whatsapp">WhatsApp</button>
+          </div>
         </div>
 
         <div class="setting-row">
@@ -184,6 +195,15 @@
             <div class="setting-val" id="setting-website-val">Off</div>
           </div>
           <button class="setting-action" id="btn-edit-website">Edit →</button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">⚙️</div>
+          <div class="setting-body">
+            <div class="setting-label">Setup wizard</div>
+            <div class="setting-val">Re-configure groups, keywords &amp; alerts</div>
+          </div>
+          <button class="setting-action" id="btn-rerun-setup">Open →</button>
         </div>
 
       </div>

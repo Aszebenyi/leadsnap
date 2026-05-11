@@ -13,10 +13,104 @@ const MIN_POST_TEXT_LENGTH = 20;
 // ── Message listener ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  // ── Discover groups from the current page's DOM ───────────────────────────
+  // ── Discover groups (instant, no scroll) ─────────────────────────────────
   if (message.type === 'LEADSNAP_GET_GROUPS') {
     sendResponse({ groups: extractGroupsFromDOM() });
     return; // synchronous
+  }
+
+  // ── Discover groups by expanding the left-sidebar group list ─────────────
+  // facebook.com/groups/ has a left sidebar with "Groups you manage" and
+  // "Groups you've joined". We click every "See more" / "See all" button in
+  // the nav area to expand both lists, then extract links from there only
+  // (ignoring the main feed which contains notifications, not group entries).
+  // Incremental scrape during each scroll step so virtualised rows that get
+  // unmounted mid-scroll are still captured (Facebook removes DOM nodes that
+  // scroll out of the viewport when the list is long).
+  // Groups are stored in a Map keyed by URL so duplicates are ignored.
+  if (message.type === 'LEADSNAP_SCROLL_EXTRACT_GROUPS') {
+    (async () => {
+      const groupMap = new Map(); // url → group object
+
+      function mergeVisible() {
+        let added = 0;
+        for (const g of extractGroupsFromDOM()) {
+          if (!groupMap.has(g.url)) { groupMap.set(g.url, g); added++; }
+        }
+        return added;
+      }
+
+      // ── 1. Page loaded ────────────────────────────────────────────────────
+      console.log('[LeadSnap] Current URL:', window.location.href);
+
+      // Facebook lays out the groups grid inside [role="main"] which has its
+      // own overflow:auto scroll container. The outer document.body has a fixed
+      // height equal to the viewport, so window.scrollBy does nothing and
+      // document.body.scrollHeight never changes. We must scroll the inner
+      // container directly so Facebook's IntersectionObserver fires and
+      // lazy-loads more groups.
+      const root      = document.querySelector('[role="main"]') || document.scrollingElement || document.documentElement;
+      const scrollEl  = (root === document) ? document.documentElement : root;
+
+      // ── 2. Initial link count ─────────────────────────────────────────────
+      const initialLinks = root.querySelectorAll('a[href*="/groups/"]');
+      console.log('[LeadSnap] Initial /groups/ links found:', initialLinks.length);
+
+      mergeVisible();
+      console.log(`[LeadSnap] Scroll 0: found ${groupMap.size} unique groups`);
+
+      const MAX_PASSES      = 120;
+      const SCROLL_DELAY_MS = 1200; // give FB time to lazy-load each batch
+      const STOP_AFTER_SAME = 6;    // stop after 6 passes with no new groups
+
+      let sameCountRuns = 0;
+      let lastLinkCount = root.querySelectorAll('a[href*="/groups/"]').length;
+
+      for (let i = 0; i < MAX_PASSES; i++) {
+        // Scroll the actual container (not window) so FB's IntersectionObserver fires
+        scrollEl.scrollTop += scrollEl.clientHeight || window.innerHeight;
+
+        await new Promise((r) => setTimeout(r, SCROLL_DELAY_MS));
+
+        mergeVisible();
+
+        // ── 3. Per-scroll log ───────────────────────────────────────────────
+        console.log(`[LeadSnap] Scroll ${i + 1}: found ${groupMap.size} unique groups`);
+
+        // Detect new content by counting raw links, not scrollHeight
+        // (body scrollHeight stays constant when content is in an inner container)
+        const newLinkCount = root.querySelectorAll('a[href*="/groups/"]').length;
+        if (newLinkCount === lastLinkCount) {
+          sameCountRuns++;
+          if (sameCountRuns >= STOP_AFTER_SAME) break;
+        } else {
+          sameCountRuns = 0;
+          lastLinkCount = newLinkCount;
+        }
+      }
+
+      const results = [...groupMap.values()];
+
+      // ── 4. Final count ────────────────────────────────────────────────────
+      console.log('[LeadSnap] Final unique groups found:', results.length);
+
+      // ── 5. First 10 results ───────────────────────────────────────────────
+      console.log('[LeadSnap] First 10 groups:');
+      results.slice(0, 10).forEach((g) => {
+        console.log(`  ${g.name} — ${g.url}`);
+      });
+
+      // ── 6. DOM dump if count is suspiciously low ──────────────────────────
+      if (results.length < 10) {
+        console.warn('[LeadSnap] Under 10 groups — raw DOM dump:');
+        [...root.querySelectorAll('a[href*="/groups/"]')].slice(0, 20).forEach((a, i) => {
+          console.log(`  [${i}] href="${a.href}" | text="${a.innerText.trim().slice(0, 80)}" | aria-label="${a.getAttribute('aria-label') || ''}"`);
+        });
+      }
+
+      sendResponse({ groups: results });
+    })();
+    return true;
   }
 
   if (message.type !== 'LEADSNAP_SCAN') return;
@@ -87,7 +181,7 @@ function getGroupName(groups) {
 // Called when the popup sends LEADSNAP_GET_GROUPS. Scrapes all group links
 // visible on the current Facebook page (sidebar, feed, etc.).
 
-const EXCLUDED_PATHS = /^\/groups\/(feed|discover|create|joins|category|search|notifications|requests|invite)/;
+const EXCLUDED_PATHS = /^\/groups\/(feed|discover|create|category|search|notifications|requests|invite)/;
 
 // Matches time-relative strings Facebook uses for "last visited" labels
 const LAST_VISITED_RE = /\d+\s*(minute|hour|day|week|month|year)s?\s*ago|yesterday|today|just now/i;
@@ -96,38 +190,127 @@ function extractGroupsFromDOM() {
   const seen = new Set();
   const groups = [];
 
-  document.querySelectorAll('a[href*="/groups/"]').forEach((link) => {
+  // On /groups/joins/ the group grid is inside [role="main"]. Searching only
+  // there avoids the left-sidebar notification links which also contain
+  // /groups/<id> URLs but whose text is "X mentioned you in…" noise.
+  // Fall back to document if [role="main"] isn't present (other FB pages).
+  const root = document.querySelector('[role="main"]') || document;
+
+  root.querySelectorAll('a[href*="/groups/"]').forEach((link) => {
     let parsed;
     try { parsed = new URL(link.href); } catch { return; }
 
     if (parsed.hostname !== 'www.facebook.com' && parsed.hostname !== 'facebook.com') return;
 
-    // Only want /groups/<id-or-slug> — not /groups/<id>/posts/<id> etc.
     const path = parsed.pathname.replace(/\/$/, '');
     if (!/^\/groups\/[^/]+$/.test(path)) return;
     if (EXCLUDED_PATHS.test(path)) return;
 
     const url = `https://www.facebook.com${path}`;
     if (seen.has(url)) return;
-    seen.add(url);
 
-    // Best-effort name extraction: aria-label → first span text → link text
-    const name = (
-      link.getAttribute('aria-label') ||
-      link.querySelector('span')?.innerText ||
-      link.innerText
-    ).trim().split('\n')[0].trim();
+    // Resolve name BEFORE marking URL as seen. Each group card has 3 <a> tags
+    // pointing to the same URL: (1) cover-photo link with no text, (2) group-name
+    // link with the real name, (3) "View group" button. If we mark seen before
+    // checking the name, the cover-photo link claims the slot and the name link
+    // is rejected as a duplicate → 0 groups captured.
+    const name = bestGroupName(link, path);
+    if (!name) return; // cover-photo / icon link — skip without claiming URL slot
 
-    if (!name || name.length < 2) return;
-
-    // Best-effort last-visited extraction: walk up a few ancestor levels and
-    // look for a sibling/descendant span with a time-relative string.
-    const lastVisited = extractLastVisited(link);
-
-    groups.push({ url, name, lastVisited });
+    seen.add(url); // only claim slot once we have a valid name
+    groups.push({ url, name, lastVisited: extractLastVisited(link) });
   });
 
   return groups;
+}
+
+/**
+ * Like extractGroupsFromDOM but restricted to the left nav/sidebar only.
+ * This avoids picking up notification links from the main feed which share
+ * the same /groups/<id> URL pattern but whose "names" are activity strings.
+ */
+function extractGroupsFromSidebar() {
+  const seen   = new Set();
+  const groups = [];
+
+  // Find the nav/sidebar containers — Facebook uses role="navigation" for the
+  // left sidebar. We also try the groups-specific nav pagelet.
+  const navRoots = [
+    ...document.querySelectorAll('[role="navigation"]'),
+    document.querySelector('[data-pagelet="LeftRail"]'),
+    document.querySelector('[data-pagelet="GroupsLeftRail"]'),
+  ].filter(Boolean);
+
+  // If we can't find a nav root, fall back to scanning everything but
+  // excluding links that are inside a [role="article"] (feed posts/notifications)
+  const searchRoots = navRoots.length ? navRoots : [document.body];
+  const excludeArticles = navRoots.length === 0;
+
+  searchRoots.forEach((root) => {
+    root.querySelectorAll('a[href*="/groups/"]').forEach((link) => {
+      if (excludeArticles && link.closest('[role="article"]')) return;
+      if (excludeArticles && link.closest('[role="feed"]'))    return;
+
+      let parsed;
+      try { parsed = new URL(link.href); } catch { return; }
+      if (parsed.hostname !== 'www.facebook.com' && parsed.hostname !== 'facebook.com') return;
+
+      const path = parsed.pathname.replace(/\/$/, '');
+      if (!/^\/groups\/[^/]+$/.test(path)) return;
+      if (EXCLUDED_PATHS.test(path)) return;
+
+      const url = `https://www.facebook.com${path}`;
+      if (seen.has(url)) return;
+
+      const name = bestGroupName(link, path);
+      if (!name) return;
+
+      seen.add(url);
+      groups.push({ url, name, lastVisited: extractLastVisited(link) });
+    });
+  });
+
+  return groups;
+}
+
+// Short Facebook UI strings that are never group names
+const FB_UI_RE = /^(view group|see more|see all|show more|create( a)? (new )?group|your groups?|discover|joined|members?|\.\.\.)$/i;
+// Notification-text patterns — long strings from activity sidebar
+const FB_NOTIF_RE = /mentioned you|commented on|replied to|reacted to|posted in|wrote on|invited you|new post|new member/i;
+
+/** Extract the best available name for a group link element.
+ *
+ * We deliberately do NOT walk up to ancestor elements to find a name, because
+ * on /groups/joins/ the page heading ("All groups you've joined (122)") is an
+ * ancestor of every link on the page and poisons every result.
+ *
+ * Instead we rely only on text that belongs directly to this link:
+ *  - aria-label attribute
+ *  - innerText of the link itself
+ *
+ * Cover-photo <a> tags wrap an <img> with no text, so they return null here.
+ * That means their URL is never added to `seen`, so the group-name <a> that
+ * follows (with the actual group title as its text) gets processed correctly.
+ */
+function bestGroupName(link, path) {
+  // 1. aria-label on the link itself
+  let name = link.getAttribute('aria-label')?.trim().split('\n')[0].trim();
+  if (isValidGroupName(name)) return name;
+
+  // 2. Inner text of the link (empty for cover-photo / icon links)
+  name = link.innerText?.trim().split('\n')[0].trim();
+  if (isValidGroupName(name)) return name;
+
+  // 3. No ancestor walk — return null so cover-photo links are skipped and
+  //    don't block the real group-name link from being processed.
+  return null;
+}
+
+function isValidGroupName(name) {
+  if (!name || name.length < 2 || name.length > 80) return false;
+  if (FB_UI_RE.test(name))    return false;
+  if (FB_NOTIF_RE.test(name)) return false;
+  return true;
 }
 
 /**

@@ -15,6 +15,7 @@ const SYNC_KEYS = {
   PHONE_NUMBER:         'phone_number',
   WEBSITE_URL:          'website_url',
   INCLUDE_WEBSITE:      'include_website_in_replies',
+  ALERT_CHANNEL:        'alert_channel',
 };
 
 const LOCAL_KEYS = {
@@ -80,6 +81,9 @@ export const setWebsiteUrl       = (v) => chrome.storage.sync.set({ [SYNC_KEYS.W
 
 export const getIncludeWebsite   = () => syncGet(SYNC_KEYS.INCLUDE_WEBSITE, false);
 export const setIncludeWebsite   = (v) => chrome.storage.sync.set({ [SYNC_KEYS.INCLUDE_WEBSITE]: v });
+
+export const getAlertChannel     = () => syncGet(SYNC_KEYS.ALERT_CHANNEL, 'sms'); // 'sms' | 'whatsapp'
+export const setAlertChannel     = (v) => chrome.storage.sync.set({ [SYNC_KEYS.ALERT_CHANNEL]: v });
 
 // ── Local storage (larger, device-only) ──────────────────────────────────────
 

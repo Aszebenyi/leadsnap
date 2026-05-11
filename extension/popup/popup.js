@@ -245,13 +245,14 @@ function relativeTime(iso) {
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
 async function loadSettings() {
-  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite] =
+  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite, alertChannel] =
     await Promise.all([
       new Promise((r) => chrome.storage.sync.get('selected_groups', (d) => r(d.selected_groups || []))),
       new Promise((r) => chrome.storage.sync.get('keywords',        (d) => r(d.keywords        || []))),
       new Promise((r) => chrome.storage.sync.get('phone_number',    (d) => r(d.phone_number    || ''))),
       new Promise((r) => chrome.storage.sync.get('website_url',     (d) => r(d.website_url     || ''))),
       new Promise((r) => chrome.storage.sync.get('include_website_in_replies', (d) => r(!!d.include_website_in_replies))),
+      new Promise((r) => chrome.storage.sync.get('alert_channel',  (d) => r(d.alert_channel   || 'sms'))),
     ]);
 
   document.getElementById('setting-keywords-val').textContent =
@@ -267,6 +268,13 @@ async function loadSettings() {
     includeWebsite && websiteUrl
       ? `On · ${websiteUrl.replace(/^https?:\/\//, '')}`
       : includeWebsite ? 'On · no URL set' : 'Off';
+
+  // Alert channel pills
+  const channelVal = document.getElementById('setting-channel-val');
+  channelVal.textContent = alertChannel === 'whatsapp' ? 'WhatsApp' : 'SMS';
+  document.querySelectorAll('.channel-pill').forEach((pill) => {
+    pill.classList.toggle('active', pill.dataset.channel === alertChannel);
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -432,6 +440,11 @@ document.getElementById('btn-open-dashboard').addEventListener('click', () =>
   openDashboardTab('/dashboard')
 );
 
+document.getElementById('btn-rerun-setup').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+  window.close();
+});
+
 // Settings → open dashboard (auth hash + settings path)
 document.getElementById('btn-manage-kw').addEventListener('click', () =>
   openDashboardTab('/settings')
@@ -442,6 +455,19 @@ document.getElementById('btn-manage-groups').addEventListener('click', () =>
 document.getElementById('btn-edit-phone').addEventListener('click', () =>
   openDashboardTab('/settings')
 );
+
+// Alert channel pills — toggle SMS ↔ WhatsApp and persist immediately
+document.querySelectorAll('.channel-pill').forEach((pill) => {
+  pill.addEventListener('click', () => {
+    const ch = pill.dataset.channel;
+    chrome.storage.sync.set({ alert_channel: ch });
+    document.querySelectorAll('.channel-pill').forEach((p) =>
+      p.classList.toggle('active', p.dataset.channel === ch)
+    );
+    document.getElementById('setting-channel-val').textContent =
+      ch === 'whatsapp' ? 'WhatsApp' : 'SMS';
+  });
+});
 document.getElementById('btn-edit-website').addEventListener('click', () =>
   openDashboardTab('/settings')
 );

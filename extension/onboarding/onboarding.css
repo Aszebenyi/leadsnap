@@ -456,8 +456,25 @@ body {
 .phone-input-wrap {
   margin-bottom: 12px;
 }
-.phone-input-wrap input[type="tel"] {
-  width: 100%;
+.phone-row {
+  display: flex;
+  gap: 8px;
+}
+.phone-country-select {
+  width: 118px;
+  flex-shrink: 0;
+  padding: 10px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.phone-country-select:focus { border-color: #f97316; }
+.phone-row input[type="tel"] {
+  flex: 1;
   padding: 10px 12px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
@@ -465,11 +482,11 @@ body {
   outline: none;
   transition: border-color 0.15s;
 }
-.phone-input-wrap input[type="tel"]:focus { border-color: #f97316; }
+.phone-row input[type="tel"]:focus { border-color: #f97316; }
 .phone-hint {
   font-size: 12px;
   color: #9ca3af;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 /* ── Toggle switch (Step 4) ── */
@@ -544,6 +561,76 @@ body {
 /* ── Step dots for 7 steps ── */
 .steps { flex-wrap: wrap; gap: 0; row-gap: 4px; }
 .step-line { max-width: 20px; }
+
+
+/* ── Groups loading progress bar ── */
+.groups-progress-wrap {
+  margin: 6px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.groups-progress-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 99px;
+  background: #e5e7eb;
+  overflow: hidden;
+  position: relative;
+}
+.groups-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, #f97316, #ea6c0b);
+  border-radius: 99px;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0%   { left: -40%; }
+  100% { left: 100%; }
+}
+.groups-progress-label {
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Alert channel selector (Step 6) ── */
+.alert-channel-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.alert-channel-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.alert-channel-btn:hover {
+  border-color: #f97316;
+  color: #f97316;
+}
+.alert-channel-btn.active {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #ea6c0b;
+  font-weight: 600;
+}
 
 /* ── Finish state ── */
 .finish-loading {
