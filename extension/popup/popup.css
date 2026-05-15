@@ -504,3 +504,155 @@ body {
   color: var(--ink-4);
   text-align: center;
 }
+
+/* ── Settings form card ── */
+.settings-form-card {
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: #fff; padding: 14px; margin-bottom: 4px;
+}
+.sform-row { margin-bottom: 10px; }
+.sform-row:last-of-type { margin-bottom: 12px; }
+.sform-label {
+  display: block; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 5px;
+}
+.sform-input {
+  width: 100%; padding: 8px 10px;
+  border: 1.5px solid var(--rule); border-radius: 7px;
+  font-size: 12px; color: var(--ink); font-family: inherit;
+  outline: none; transition: border-color .15s; background: #fff;
+}
+.sform-input:focus { border-color: var(--accent); }
+.sform-input::placeholder { color: var(--ink-4); }
+.sform-textarea {
+  width: 100%; padding: 8px 10px;
+  border: 1.5px solid var(--rule); border-radius: 7px;
+  font-size: 12px; color: var(--ink); font-family: inherit;
+  outline: none; transition: border-color .15s;
+  resize: vertical; background: #fff; line-height: 1.5;
+}
+.sform-textarea:focus { border-color: var(--accent); }
+.sform-textarea::placeholder { color: var(--ink-4); }
+
+/* Website row: input + inline toggle */
+.sform-website-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.sform-website-row .sform-input { flex: 1; min-width: 0; }
+.sform-toggle-inline {
+  display: flex; align-items: center; gap: 5px;
+  cursor: pointer; flex-shrink: 0;
+}
+.sform-toggle-inline input { display: none; }
+.sform-toggle-track {
+  position: relative; width: 30px; height: 17px;
+  border-radius: 99px; background: var(--rule);
+  transition: background .2s; flex-shrink: 0; cursor: pointer;
+}
+.sform-toggle-inline input:checked + .sform-toggle-track { background: var(--accent); }
+.sform-toggle-track::after {
+  content: ''; position: absolute;
+  width: 13px; height: 13px; border-radius: 50%;
+  top: 2px; left: 2px; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform .2s;
+}
+.sform-toggle-inline input:checked + .sform-toggle-track::after { transform: translateX(13px); }
+.sform-toggle-lbl { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+
+/* Phone row: input + channel pills */
+.sform-phone-row { display: flex; gap: 8px; align-items: center; }
+.sform-phone-row .sform-input { flex: 1; min-width: 0; }
+.channel-pill-group { display: flex; gap: 4px; flex-shrink: 0; }
+
+/* Inline feedback messages */
+.sform-feedback {
+  font-size: 11px; border-radius: 6px; padding: 6px 10px; margin-top: 6px;
+}
+.sform-feedback-success { background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+.sform-feedback-error   { background: var(--red-bg);   color: var(--red);   border: 1px solid #fecaca; }
+
+/* ── Inline managers (inside settings-list card) ── */
+.inline-manager {
+  background: var(--surface); border-top: 1px solid var(--rule);
+  padding: 10px 14px 12px;
+}
+.kw-add-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.inline-input {
+  flex: 1; padding: 7px 10px;
+  border: 1.5px solid var(--rule); border-radius: 7px;
+  font-size: 12px; color: var(--ink); font-family: inherit;
+  outline: none; transition: border-color .15s; background: #fff;
+}
+.inline-input:focus { border-color: var(--accent); }
+.inline-input::placeholder { color: var(--ink-4); }
+.btn.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+
+.inline-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.kw-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--accent-light); color: var(--accent-text);
+  border-radius: 5px; padding: 3px 8px; font-size: 11px; font-weight: 600;
+}
+.kw-chip-remove {
+  background: none; border: none; padding: 0;
+  font-size: 14px; line-height: 1; cursor: pointer;
+  color: var(--accent-text); opacity: .7; transition: opacity .1s;
+}
+.kw-chip-remove:hover { opacity: 1; }
+.kw-empty, .inline-empty {
+  font-size: 11px; color: var(--ink-4); padding: 4px 0; line-height: 1.4;
+}
+
+.inline-group-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--rule);
+}
+.inline-group-row:last-child { border-bottom: none; }
+.inline-group-name {
+  font-size: 12px; color: var(--ink-2); flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.inline-remove-btn {
+  background: none; border: none; padding: 0 2px;
+  font-size: 16px; color: var(--ink-4); cursor: pointer;
+  transition: color .1s; flex-shrink: 0; line-height: 1;
+}
+.inline-remove-btn:hover { color: var(--red); }
+.inline-manager-footer {
+  padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--rule);
+}
+
+/* ── Account section ── */
+.account-sub-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 6px;
+}
+.sub-badge {
+  display: inline-block; border-radius: 99px;
+  font-size: 11px; font-weight: 600; padding: 3px 9px;
+}
+.sub-badge-trial   { background: var(--amber-bg); color: var(--amber); border: 1px solid #fde68a; }
+.sub-badge-pro     { background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+.sub-badge-expired { background: var(--red-bg);   color: var(--red);   border: 1px solid #fecaca; }
+
+/* ── Danger zone ── */
+.danger-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 10px 0;
+  background: none; border: none; border-top: 1px solid var(--rule);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ink-4); cursor: pointer;
+  margin-top: 4px; transition: color .15s;
+}
+.danger-toggle:hover { color: var(--red); }
+.danger-zone-inner { padding-bottom: 12px; }
+.btn-danger {
+  background: #fff; color: var(--red);
+  border: 1.5px solid var(--red); border-radius: 8px;
+}
+.btn-danger:hover { background: var(--red-bg); opacity: 1; }
+
+/* ── Scrollable settings panel ── */
+#tab-settings { max-height: 480px; overflow-y: auto; }

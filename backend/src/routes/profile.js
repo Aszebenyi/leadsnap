@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import supabase from '../lib/supabase.js';
 import { extractBusinessInfo, suggestLeadDescription } from '../services/claude.js';
+import { sendLeadAlert, sendLeadAlertWhatsApp } from '../services/twilio.js';
 
 const router = Router();
 
@@ -172,6 +173,43 @@ router.delete('/', requireAuth, async (req, res, next) => {
     const { error } = await supabase.auth.admin.deleteUser(req.user.id);
     if (error) throw error;
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/profile/test-alert — sends a real test message to confirm delivery
+router.post('/test-alert', requireAuth, async (req, res, next) => {
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('phone_number')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error) throw error;
+
+    if (!profile?.phone_number) {
+      return res.status(400).json({ error: 'No phone number saved. Add your phone number first.' });
+    }
+
+    const channel = req.body?.channel === 'whatsapp' ? 'whatsapp' : 'sms';
+    const testPayload = {
+      to:        profile.phone_number,
+      groupName: 'LeadSnap Test',
+      postText:  '✅ Test alert — your LeadSnap notifications are working! You\'ll receive a message like this whenever a matching lead is found.',
+      postUrl:   null,
+      score:     null,
+      aiReply:   null,
+    };
+
+    if (channel === 'whatsapp') {
+      await sendLeadAlertWhatsApp(testPayload);
+    } else {
+      await sendLeadAlert(testPayload);
+    }
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

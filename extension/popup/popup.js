@@ -1,5 +1,18 @@
 // LeadSnap popup — ES module
-import { getLeads } from '../utils/api.js';
+import {
+  getLeads,
+  getProfile,
+  updateProfile,
+  getKeywords,
+  addKeyword,
+  deleteKeyword,
+  getGroups,
+  deleteGroup,
+  getBillingStatus,
+  createPortal,
+  sendTestAlert,
+  deleteProfile as apiDeleteProfile,
+} from '../utils/api.js';
 import {
   getAuthToken,
   clearSession,
@@ -10,8 +23,6 @@ import {
   isOnboardingComplete,
   getRefreshToken,
   setSession,
-  getManualScanAgeHours,
-  setManualScanAgeHours,
   getScanState,
   setScanState,
   getLeadsFoundToday,
@@ -414,76 +425,124 @@ function relativeTime(iso) {
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
-const MANUAL_SCAN_AGE_LABELS = {
-  0.5: 'Last 30 minutes',
-  2:   'Last 2 hours',
-  24:  'Last 24 hours',
-  168: 'Last 7 days',
-};
+// State for inline managers
+let kwManagerOpen  = false;
+let loadedKeywords = [];
+let groupsMgrOpen  = false;
+let loadedGroups   = [];
 
 async function loadSettings() {
-  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite, alertChannel, manualScanAgeHours] =
-    await Promise.all([
-      new Promise((r) => chrome.storage.sync.get('selected_groups', (d) => r(d.selected_groups || []))),
-      new Promise((r) => chrome.storage.sync.get('keywords',        (d) => r(d.keywords        || []))),
-      new Promise((r) => chrome.storage.sync.get('phone_number',    (d) => r(d.phone_number    || ''))),
-      new Promise((r) => chrome.storage.sync.get('website_url',     (d) => r(d.website_url     || ''))),
+  if (!token) return;
+  try {
+    const [profile, storedWebsite, storedInclude, storedChannel] = await Promise.all([
+      getProfile(token),
+      new Promise((r) => chrome.storage.sync.get('website_url', (d) => r(d.website_url || ''))),
       new Promise((r) => chrome.storage.sync.get('include_website_in_replies', (d) => r(!!d.include_website_in_replies))),
-      new Promise((r) => chrome.storage.sync.get('alert_channel',  (d) => r(d.alert_channel   || 'sms'))),
-      getManualScanAgeHours(),
+      new Promise((r) => chrome.storage.sync.get('alert_channel', (d) => r(d.alert_channel || 'sms'))),
     ]);
 
-  document.getElementById('setting-keywords-val').textContent =
-    cachedKeywords.length ? `${cachedKeywords.length} keyword${cachedKeywords.length !== 1 ? 's' : ''}` : 'None added';
+    // Business Profile
+    document.getElementById('sfield-biz-name').value  = profile.business_name        || '';
+    document.getElementById('sfield-desc').value      = profile.service_description  || '';
+    document.getElementById('sfield-website').value   = storedWebsite;
+    document.getElementById('sfield-include-website').checked = storedInclude;
 
-  document.getElementById('setting-groups-val').textContent =
-    savedGroups.length ? `${savedGroups.length} group${savedGroups.length !== 1 ? 's' : ''} selected` : 'None selected';
+    // Alerts
+    document.getElementById('sfield-phone').value = profile.phone_number || '';
+    document.querySelectorAll('#alert-channel-pills .channel-pill').forEach((p) => {
+      p.classList.toggle('active', p.dataset.channel === storedChannel);
+    });
+  } catch (err) {
+    console.warn('[LeadSnap] loadSettings profile error:', err);
+  }
 
-  document.getElementById('setting-phone-val').textContent =
-    phoneNumber || 'No phone number';
+  // Counts (non-blocking)
+  updateKeywordsCount();
+  updateGroupsCount();
 
-  document.getElementById('setting-website-val').textContent =
-    includeWebsite && websiteUrl
-      ? `On · ${websiteUrl.replace(/^https?:\/\//, '')}`
-      : includeWebsite ? 'On · no URL set' : 'Off';
-
-  // Alert channel pills
-  const channelVal = document.getElementById('setting-channel-val');
-  channelVal.textContent = alertChannel === 'whatsapp' ? 'WhatsApp' : 'SMS';
-  document.querySelectorAll('.channel-pill[data-channel]').forEach((pill) => {
-    pill.classList.toggle('active', pill.dataset.channel === alertChannel);
-  });
-
-  // Scan window pills
-  const ageVal = document.getElementById('setting-scan-age-val');
-  ageVal.textContent = MANUAL_SCAN_AGE_LABELS[manualScanAgeHours] ?? 'Last 2 hours';
-  document.querySelectorAll('.channel-pill[data-age]').forEach((pill) => {
-    pill.classList.toggle('active', Number(pill.dataset.age) === manualScanAgeHours);
-  });
+  // Account section (non-blocking)
+  loadAccountSection();
 }
 
-// Scan window pill clicks
-document.getElementById('scan-age-toggle-row').addEventListener('click', async (e) => {
-  const pill = e.target.closest('.channel-pill[data-age]');
-  if (!pill) return;
-  const hours = Number(pill.dataset.age);
-  await setManualScanAgeHours(hours);
-  document.getElementById('setting-scan-age-val').textContent = MANUAL_SCAN_AGE_LABELS[hours] ?? 'Last 2 hours';
-  document.querySelectorAll('.channel-pill[data-age]').forEach((p) => {
-    p.classList.toggle('active', p === pill);
-  });
-});
+async function updateKeywordsCount() {
+  try {
+    const data = await getKeywords(token);
+    loadedKeywords = data?.keywords ?? (Array.isArray(data) ? data : []);
+    document.getElementById('setting-keywords-val').textContent =
+      loadedKeywords.length
+        ? `${loadedKeywords.length} keyword${loadedKeywords.length !== 1 ? 's' : ''}`
+        : 'None added';
+  } catch { /* silent */ }
+}
 
-// Run manual scan link
-document.getElementById('btn-run-manual-scan').addEventListener('click', async () => {
-  const hours = await getManualScanAgeHours();
-  chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN', maxAgeHours: hours });
-  // Switch to Status tab
-  document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
-  document.querySelector('.tab[data-tab="status"]').classList.add('active');
-  document.getElementById('tab-status').classList.remove('hidden');
-});
+async function updateGroupsCount() {
+  try {
+    const data = await getGroups(token);
+    loadedGroups = data?.groups ?? (Array.isArray(data) ? data : []);
+    document.getElementById('setting-groups-val').textContent =
+      loadedGroups.length
+        ? `${loadedGroups.length} group${loadedGroups.length !== 1 ? 's' : ''} selected`
+        : 'None selected';
+  } catch { /* silent */ }
+}
+
+async function loadAccountSection() {
+  const loadingEl = document.getElementById('account-loading');
+  const contentEl = document.getElementById('account-content');
+  try {
+    const billing = await getBillingStatus(token);
+    loadingEl.style.display = 'none';
+    contentEl.classList.remove('hidden');
+
+    const badge      = document.getElementById('sub-status-badge');
+    const upgradeBtn = document.getElementById('btn-upgrade-settings');
+    const portalBtn  = document.getElementById('btn-billing-portal');
+
+    if (!billing || billing.status === 'trial') {
+      const trialEnd  = billing?.trial_ends_at ? new Date(billing.trial_ends_at) : null;
+      const daysLeft  = trialEnd ? Math.max(0, Math.ceil((trialEnd - Date.now()) / 86_400_000)) : 7;
+      badge.textContent = `Trial · ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
+      badge.className   = 'sub-badge sub-badge-trial';
+      upgradeBtn.classList.remove('hidden');
+      portalBtn.classList.add('hidden');
+    } else if (billing.status === 'active') {
+      badge.textContent = 'Pro · Active';
+      badge.className   = 'sub-badge sub-badge-pro';
+      upgradeBtn.classList.add('hidden');
+      portalBtn.classList.remove('hidden');
+    } else {
+      badge.textContent = 'Subscription expired';
+      badge.className   = 'sub-badge sub-badge-expired';
+      upgradeBtn.classList.remove('hidden');
+      portalBtn.classList.add('hidden');
+    }
+  } catch {
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (contentEl) {
+      contentEl.classList.remove('hidden');
+      document.getElementById('sub-status-badge').textContent = 'Unable to load';
+      document.getElementById('sub-status-badge').className   = 'sub-badge';
+    }
+  }
+}
+
+function showFeedback(el, msg, type) {
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = `sform-feedback sform-feedback-${type}`;
+  el.classList.remove('hidden');
+  if (type === 'success') setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+function friendlyError(err) {
+  const msg = err?.message || '';
+  if (/network|fetch|failed to fetch/i.test(msg))                    return 'Connection error. Check your internet.';
+  if (/401|unauthorized/i.test(msg) || err?.statusCode === 401)       return 'Session expired. Please sign in again.';
+  if (/403|forbidden/i.test(msg)    || err?.statusCode === 403)       return 'Access denied.';
+  if (/subscription/i.test(msg))                                      return 'An active subscription is required.';
+  if (msg.length > 0 && msg.length < 120)                             return msg;
+  return 'Something went wrong. Please try again.';
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -648,34 +707,245 @@ document.getElementById('btn-rerun-setup').addEventListener('click', () => {
   window.close();
 });
 
-// Settings → open dashboard (auth hash + settings path)
-document.getElementById('btn-manage-kw').addEventListener('click', () =>
-  openDashboardTab('/settings')
-);
-document.getElementById('btn-manage-groups').addEventListener('click', () =>
-  openDashboardTab('/settings')
-);
-document.getElementById('btn-edit-phone').addEventListener('click', () =>
-  openDashboardTab('/settings')
-);
+// ── Settings event listeners ──────────────────────────────────────────────────
 
-// Alert channel pills — toggle SMS ↔ WhatsApp and persist immediately
-document.querySelectorAll('.channel-pill').forEach((pill) => {
-  pill.addEventListener('click', () => {
-    const ch = pill.dataset.channel;
-    if (!ch) return; // age pills handled separately
-    chrome.storage.sync.set({ alert_channel: ch });
-    document.querySelectorAll('.channel-pill[data-channel]').forEach((p) =>
-      p.classList.toggle('active', p.dataset.channel === ch)
-    );
-    document.getElementById('setting-channel-val').textContent =
-      ch === 'whatsapp' ? 'WhatsApp' : 'SMS';
-  });
+// Save Business Profile
+document.getElementById('btn-save-profile').addEventListener('click', async () => {
+  const fb         = document.getElementById('profile-feedback');
+  const btn        = document.getElementById('btn-save-profile');
+  const bizName    = document.getElementById('sfield-biz-name').value.trim();
+  const desc       = document.getElementById('sfield-desc').value.trim();
+  const website    = document.getElementById('sfield-website').value.trim();
+  const includeWeb = document.getElementById('sfield-include-website').checked;
+
+  btn.disabled = true;
+  try {
+    const updates = {};
+    if (bizName !== undefined) updates.business_name        = bizName;
+    if (desc    !== undefined) updates.service_description  = desc;
+    if (Object.keys(updates).length) await updateProfile(token, updates);
+    await chrome.storage.sync.set({ website_url: website, include_website_in_replies: includeWeb });
+    if (desc) await chrome.storage.sync.set({ ai_description: desc });
+    showFeedback(fb, '✓ Profile saved', 'success');
+  } catch (err) {
+    showFeedback(fb, friendlyError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
-document.getElementById('btn-edit-website').addEventListener('click', () =>
-  openDashboardTab('/settings')
+// Save Alerts
+document.getElementById('btn-save-alerts').addEventListener('click', async () => {
+  const fb      = document.getElementById('alerts-feedback');
+  const btn     = document.getElementById('btn-save-alerts');
+  const phone   = document.getElementById('sfield-phone').value.trim();
+  const channel = document.querySelector('#alert-channel-pills .channel-pill.active')?.dataset.channel || 'sms';
+
+  btn.disabled = true;
+  try {
+    await updateProfile(token, { phone_number: phone });
+    await chrome.storage.sync.set({ alert_channel: channel, phone_number: phone });
+    showFeedback(fb, '✓ Alerts saved', 'success');
+  } catch (err) {
+    showFeedback(fb, friendlyError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Send test alert
+document.getElementById('btn-test-alert').addEventListener('click', async () => {
+  const fb      = document.getElementById('alerts-feedback');
+  const btn     = document.getElementById('btn-test-alert');
+  const channel = document.querySelector('#alert-channel-pills .channel-pill.active')?.dataset.channel || 'sms';
+
+  btn.disabled    = true;
+  btn.textContent = 'Sending…';
+  try {
+    await sendTestAlert(token, channel);
+    showFeedback(fb, '✓ Test alert sent! Check your phone.', 'success');
+  } catch (err) {
+    showFeedback(fb, friendlyError(err), 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Send test alert';
+  }
+});
+
+// Alert channel pills
+document.getElementById('alert-channel-pills').addEventListener('click', (e) => {
+  const pill = e.target.closest('.channel-pill[data-channel]');
+  if (!pill) return;
+  document.querySelectorAll('#alert-channel-pills .channel-pill').forEach((p) =>
+    p.classList.toggle('active', p === pill)
+  );
+});
+
+// Keywords manager toggle
+document.getElementById('btn-manage-kw').addEventListener('click', async () => {
+  kwManagerOpen = !kwManagerOpen;
+  document.getElementById('kw-manager').classList.toggle('hidden', !kwManagerOpen);
+  document.getElementById('btn-manage-kw').textContent = kwManagerOpen ? 'Close ✕' : 'Manage →';
+  if (kwManagerOpen) await renderKwChips();
+});
+
+async function renderKwChips() {
+  if (!token) return;
+  const chipsEl = document.getElementById('kw-chips');
+  const fb      = document.getElementById('kw-feedback');
+  fb.classList.add('hidden');
+  try {
+    const data     = await getKeywords(token);
+    loadedKeywords = data?.keywords ?? (Array.isArray(data) ? data : []);
+
+    if (!loadedKeywords.length) {
+      chipsEl.innerHTML = '<div class="kw-empty">No keywords yet — add one above</div>';
+    } else {
+      chipsEl.innerHTML = loadedKeywords.map((kw) => `
+        <div class="kw-chip">
+          <span>${escHtml(kw.keyword)}</span>
+          <button class="kw-chip-remove" data-id="${escHtml(kw.id)}" title="Remove">×</button>
+        </div>`).join('');
+      chipsEl.querySelectorAll('.kw-chip-remove').forEach((btn) => {
+        btn.addEventListener('click', () => handleRemoveKeyword(btn.dataset.id));
+      });
+    }
+    // Sync count label
+    document.getElementById('setting-keywords-val').textContent =
+      loadedKeywords.length
+        ? `${loadedKeywords.length} keyword${loadedKeywords.length !== 1 ? 's' : ''}`
+        : 'None added';
+  } catch (err) {
+    showFeedback(fb, friendlyError(err), 'error');
+  }
+}
+
+document.getElementById('btn-kw-add').addEventListener('click', handleAddKeyword);
+document.getElementById('kw-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleAddKeyword();
+});
+
+async function handleAddKeyword() {
+  const input = document.getElementById('kw-input');
+  const fb    = document.getElementById('kw-feedback');
+  const kw    = input.value.trim();
+  if (!kw) return;
+  fb.classList.add('hidden');
+  try {
+    await addKeyword(token, kw);
+    input.value = '';
+    await renderKwChips();
+  } catch (err) {
+    showFeedback(fb, friendlyError(err), 'error');
+  }
+}
+
+async function handleRemoveKeyword(id) {
+  const fb = document.getElementById('kw-feedback');
+  try {
+    await deleteKeyword(token, id);
+    await renderKwChips();
+  } catch (err) {
+    showFeedback(fb, friendlyError(err), 'error');
+  }
+}
+
+// Groups manager toggle
+document.getElementById('btn-manage-groups').addEventListener('click', async () => {
+  groupsMgrOpen = !groupsMgrOpen;
+  document.getElementById('groups-manager').classList.toggle('hidden', !groupsMgrOpen);
+  document.getElementById('btn-manage-groups').textContent = groupsMgrOpen ? 'Close ✕' : 'Manage →';
+  if (groupsMgrOpen) await renderGroupsList();
+});
+
+async function renderGroupsList() {
+  if (!token) return;
+  const listEl = document.getElementById('groups-list-inline');
+  try {
+    const data   = await getGroups(token);
+    loadedGroups = data?.groups ?? (Array.isArray(data) ? data : []);
+
+    if (!loadedGroups.length) {
+      listEl.innerHTML = '<div class="inline-empty">No groups configured — use the setup wizard to add some.</div>';
+      document.getElementById('setting-groups-val').textContent = 'None selected';
+      return;
+    }
+
+    listEl.innerHTML = loadedGroups.map((g) => `
+      <div class="inline-group-row">
+        <span class="inline-group-name">${escHtml(g.group_name || g.facebook_group_url)}</span>
+        <button class="inline-remove-btn" data-id="${escHtml(g.id)}" title="Remove">×</button>
+      </div>`).join('');
+
+    listEl.querySelectorAll('.inline-remove-btn').forEach((btn) => {
+      btn.addEventListener('click', () => handleRemoveGroup(btn.dataset.id));
+    });
+
+    document.getElementById('setting-groups-val').textContent =
+      `${loadedGroups.length} group${loadedGroups.length !== 1 ? 's' : ''} selected`;
+  } catch (err) {
+    listEl.innerHTML = `<div class="inline-empty" style="color:var(--red)">${escHtml(friendlyError(err))}</div>`;
+  }
+}
+
+async function handleRemoveGroup(id) {
+  try {
+    await deleteGroup(token, id);
+    await renderGroupsList();
+  } catch (err) {
+    const listEl = document.getElementById('groups-list-inline');
+    listEl.insertAdjacentHTML('afterbegin',
+      `<div class="inline-empty" style="color:var(--red);margin-bottom:6px">${escHtml(friendlyError(err))}</div>`);
+  }
+}
+
+document.getElementById('btn-groups-wizard').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+  window.close();
+});
+
+// Account — upgrade + portal buttons
+document.getElementById('btn-upgrade-settings').addEventListener('click', () =>
+  openDashboardTab('/billing')
 );
+document.getElementById('btn-billing-portal').addEventListener('click', async () => {
+  try {
+    const { url } = await createPortal(token);
+    chrome.tabs.create({ url });
+  } catch {
+    openDashboardTab('/billing');
+  }
+});
+
+// Danger zone toggle
+document.getElementById('btn-danger-toggle').addEventListener('click', () => {
+  const zone    = document.getElementById('danger-zone');
+  const chevron = document.getElementById('danger-chevron');
+  const isOpen  = !zone.classList.contains('hidden');
+  zone.classList.toggle('hidden', isOpen);
+  chevron.textContent = isOpen ? '▾' : '▴';
+});
+
+// Sign out (danger zone)
+document.getElementById('btn-signout-danger').addEventListener('click', async () => {
+  await clearSession();
+  showView('logged-out');
+});
+
+// Delete account
+document.getElementById('btn-delete-account').addEventListener('click', async () => {
+  const first = confirm('Are you sure you want to delete your account? This cannot be undone.');
+  if (!first) return;
+  const second = confirm('This will permanently delete all your leads, keywords, and settings. Continue?');
+  if (!second) return;
+  try {
+    await apiDeleteProfile(token);
+    await clearSession();
+    showView('logged-out');
+  } catch (err) {
+    alert('Could not delete account: ' + friendlyError(err));
+  }
+});
 
 toggleScanning.addEventListener('change', (e) => {
   setScanningEnabled(e.target.checked);

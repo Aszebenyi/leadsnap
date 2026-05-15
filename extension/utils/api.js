@@ -102,3 +102,17 @@ export function createCheckout(token) {
 export function createPortal(token) {
   return request('/api/billing/portal', { method: 'POST' }, token);
 }
+
+export function getBillingStatus(token) {
+  return request('/api/billing/status', {}, token);
+}
+
+// ── Test alert & account deletion ────────────────────────────────────────────
+
+export function sendTestAlert(token, channel) {
+  return request('/api/profile/test-alert', { method: 'POST', body: JSON.stringify({ channel }) }, token);
+}
+
+export function deleteProfile(token) {
+  return request('/api/profile', { method: 'DELETE' }, token);
+}

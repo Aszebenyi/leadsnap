@@ -128,6 +128,34 @@
     <!-- ══ Settings tab ══ -->
     <div id="tab-settings" class="tab-panel hidden">
 
+      <!-- ── BUSINESS PROFILE ── -->
+      <div class="settings-section-header">Business Profile</div>
+      <div class="settings-form-card">
+        <div class="sform-row">
+          <label class="sform-label" for="sfield-biz-name">Business name</label>
+          <input id="sfield-biz-name" type="text" class="sform-input" placeholder="e.g. Austin Lawn Care" maxlength="200" />
+        </div>
+        <div class="sform-row">
+          <label class="sform-label" for="sfield-desc">Service description</label>
+          <textarea id="sfield-desc" class="sform-textarea" rows="3" maxlength="2000"
+            placeholder="Describe what you do and who your ideal customer is — this is used to generate personalised AI replies"></textarea>
+        </div>
+        <div class="sform-row">
+          <label class="sform-label">Website</label>
+          <div class="sform-website-row">
+            <input id="sfield-website" type="url" class="sform-input" placeholder="https://yourbusiness.com" />
+            <label class="sform-toggle-inline">
+              <input type="checkbox" id="sfield-include-website" />
+              <span class="sform-toggle-track"></span>
+              <span class="sform-toggle-lbl">In replies</span>
+            </label>
+          </div>
+        </div>
+        <div id="profile-feedback" class="sform-feedback hidden"></div>
+        <button id="btn-save-profile" class="btn btn-primary btn-full">Save profile</button>
+      </div>
+
+      <!-- ── MONITORING ── -->
       <div class="settings-section-header">Monitoring</div>
       <div class="settings-list">
 
@@ -135,18 +163,32 @@
           <div class="setting-icon">🔑</div>
           <div class="setting-body">
             <div class="setting-label">Keywords</div>
-            <div class="setting-val" id="setting-keywords-val">— keywords</div>
+            <div class="setting-val" id="setting-keywords-val">Loading…</div>
           </div>
           <button class="setting-action" id="btn-manage-kw">Manage →</button>
+        </div>
+        <div id="kw-manager" class="inline-manager hidden">
+          <div class="kw-add-row">
+            <input id="kw-input" type="text" class="inline-input" placeholder="Add a keyword…" maxlength="60" />
+            <button id="btn-kw-add" class="btn btn-sm btn-primary">Add</button>
+          </div>
+          <div id="kw-chips" class="inline-chips"></div>
+          <div id="kw-feedback" class="sform-feedback hidden" style="margin-top:6px;margin-bottom:0"></div>
         </div>
 
         <div class="setting-row">
           <div class="setting-icon">📡</div>
           <div class="setting-body">
             <div class="setting-label">Groups</div>
-            <div class="setting-val" id="setting-groups-val">— selected</div>
+            <div class="setting-val" id="setting-groups-val">Loading…</div>
           </div>
           <button class="setting-action" id="btn-manage-groups">Manage →</button>
+        </div>
+        <div id="groups-manager" class="inline-manager hidden">
+          <div id="groups-list-inline"></div>
+          <div class="inline-manager-footer">
+            <button id="btn-groups-wizard" class="btn-link-scan">Add groups via setup wizard →</button>
+          </div>
         </div>
 
         <div class="setting-row">
@@ -155,67 +197,60 @@
             <div class="setting-label">Setup wizard</div>
             <div class="setting-val">Re-configure groups, keywords &amp; alerts</div>
           </div>
-          <button class="setting-action" id="btn-rerun-setup">Open →</button>
+          <button class="setting-action" id="btn-rerun-setup">Re-run →</button>
         </div>
 
       </div>
 
+      <!-- ── ALERTS ── -->
       <div class="settings-section-header">Alerts</div>
-      <div class="settings-list">
-
-        <div class="setting-row">
-          <div class="setting-icon">📱</div>
-          <div class="setting-body">
-            <div class="setting-label">Alerts</div>
-            <div class="setting-val" id="setting-phone-val">No phone number</div>
-          </div>
-          <button class="setting-action" id="btn-edit-phone">Edit →</button>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-icon">💬</div>
-          <div class="setting-body">
-            <div class="setting-label">Alert channel</div>
-            <div class="setting-val" id="setting-channel-val">SMS</div>
-          </div>
-          <div class="channel-toggle-row" id="channel-toggle-row">
-            <button class="channel-pill active" id="pill-sms" data-channel="sms">SMS</button>
-            <button class="channel-pill" id="pill-whatsapp" data-channel="whatsapp">WhatsApp</button>
+      <div class="settings-form-card">
+        <div class="sform-row">
+          <label class="sform-label">Phone &amp; channel</label>
+          <div class="sform-phone-row">
+            <input id="sfield-phone" type="tel" class="sform-input" placeholder="+1 400 000 0000" />
+            <div class="channel-pill-group" id="alert-channel-pills">
+              <button class="channel-pill active" data-channel="sms">SMS</button>
+              <button class="channel-pill" data-channel="whatsapp">WhatsApp</button>
+            </div>
           </div>
         </div>
-
-        <div class="setting-row">
-          <div class="setting-icon">🌐</div>
-          <div class="setting-body">
-            <div class="setting-label">Website in replies</div>
-            <div class="setting-val" id="setting-website-val">Off</div>
-          </div>
-          <button class="setting-action" id="btn-edit-website">Edit →</button>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-icon">🕐</div>
-          <div class="setting-body">
-            <div class="setting-label">Scan window</div>
-            <div class="setting-val" id="setting-scan-age-val">Last 2 hours</div>
-          </div>
-          <div class="channel-toggle-row" id="scan-age-toggle-row">
-            <button class="channel-pill" data-age="0.5">30m</button>
-            <button class="channel-pill active" data-age="2">2h</button>
-            <button class="channel-pill" data-age="24">24h</button>
-            <button class="channel-pill" data-age="168">7d</button>
-          </div>
-        </div>
-        <div class="setting-row" style="border-top:none;padding-top:4px;padding-bottom:8px">
-          <div style="flex:1"></div>
-          <button id="btn-run-manual-scan" class="btn-link-scan">Run manual scan →</button>
-        </div>
-
+        <button id="btn-test-alert" class="btn btn-ghost-border btn-full" style="margin-bottom:8px">Send test alert</button>
+        <div id="alerts-feedback" class="sform-feedback hidden"></div>
+        <button id="btn-save-alerts" class="btn btn-primary btn-full">Save alerts</button>
       </div>
 
-      <button id="btn-open-dashboard" class="btn btn-primary btn-full" style="margin-top:12px">
-        Open Full Dashboard
+      <!-- ── ACCOUNT ── -->
+      <div class="settings-section-header">Account</div>
+      <div class="settings-form-card">
+        <div id="account-loading" style="display:flex;justify-content:center;padding:8px 0">
+          <div class="spinner sm"></div>
+        </div>
+        <div id="account-content" class="hidden">
+          <div class="account-sub-row">
+            <span id="sub-status-badge" class="sub-badge"></span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="btn-upgrade-settings" class="btn btn-primary hidden" style="font-size:12px;padding:5px 12px">Upgrade →</button>
+              <button id="btn-billing-portal" class="btn-link-scan hidden">Manage billing →</button>
+            </div>
+          </div>
+          <button id="btn-open-dashboard" class="btn btn-ghost-border btn-full" style="margin-top:10px;font-size:12px">Open Full Dashboard →</button>
+        </div>
+      </div>
+
+      <!-- ── DANGER ZONE ── -->
+      <button id="btn-danger-toggle" class="danger-toggle">
+        <span>Danger zone</span>
+        <span id="danger-chevron">▾</span>
       </button>
+      <div id="danger-zone" class="hidden">
+        <div class="danger-zone-inner">
+          <button id="btn-signout-danger" class="btn btn-ghost-border btn-full" style="margin-bottom:8px">Sign out</button>
+          <button id="btn-delete-account" class="btn btn-danger btn-full">Delete account…</button>
+        </div>
+      </div>
+
+      <div style="height:16px"></div>
     </div>
 
   </div><!-- /view-logged-in -->
