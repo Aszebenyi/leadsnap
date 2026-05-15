@@ -3,28 +3,17 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 
-// ── Startup env validation ────────────────────────────────────────────────────
-// Hard-fail for vars the server cannot function without at all.
-// Warn (but keep running) for vars that only affect optional features.
-const CRITICAL_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
-const OPTIONAL_ENV = [
-  'ANTHROPIC_API_KEY',    // AI scoring + replies
-  'TWILIO_ACCOUNT_SID',   // SMS alerts
-  'TWILIO_AUTH_TOKEN',    // SMS alerts
-  'TWILIO_PHONE_NUMBER',  // SMS alerts
-  'STRIPE_SECRET_KEY',    // billing
-  'STRIPE_WEBHOOK_SECRET',// billing webhooks
+// ── Startup env check (warn only — never exit) ────────────────────────────────
+// Each service handles missing vars gracefully at call time.
+// We log once at startup so it's easy to spot in Railway deploy logs.
+const ALL_ENV = [
+  'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
+  'ANTHROPIC_API_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN',
+  'TWILIO_PHONE_NUMBER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET',
 ];
-
-const missingCritical = CRITICAL_ENV.filter((k) => !process.env[k]);
-if (missingCritical.length > 0) {
-  console.error(`[LeadSnap] FATAL — missing critical env var(s): ${missingCritical.join(', ')}`);
-  process.exit(1);
-}
-
-const missingOptional = OPTIONAL_ENV.filter((k) => !process.env[k]);
-if (missingOptional.length > 0) {
-  console.warn(`[LeadSnap] WARNING — missing optional env var(s): ${missingOptional.join(', ')} — related features will be disabled`);
+const missingEnv = ALL_ENV.filter((k) => !process.env[k]);
+if (missingEnv.length > 0) {
+  console.warn(`[LeadSnap] Missing env var(s): ${missingEnv.join(', ')} — related features will be unavailable`);
 }
 
 process.on('uncaughtException', (err) => {
