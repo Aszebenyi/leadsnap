@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import supabase from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user } = useAuth();
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -24,8 +26,11 @@ export default function Navbar() {
   return (
     <nav className="bg-white border-b border-gray-200">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to="/dashboard" className="font-bold text-orange-500 text-lg tracking-tight">
-          LeadSnap
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(145deg, #f97316, #ea6c0b)' }}>
+            <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
+          </div>
+          <span className="font-bold text-gray-900 text-base tracking-tight">LeadSnap</span>
         </Link>
 
         {/* Desktop links */}
@@ -33,6 +38,9 @@ export default function Navbar() {
           <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>
           <NavLink to="/settings"  className={linkClass}>Settings</NavLink>
           <NavLink to="/billing"   className={linkClass}>Billing</NavLink>
+          {user?.email && (
+            <span className="text-xs text-gray-400 max-w-[180px] truncate">{user.email}</span>
+          )}
           <button
             onClick={handleSignOut}
             className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
@@ -59,6 +67,9 @@ export default function Navbar() {
           <NavLink to="/dashboard" className={mobileLinkClass} onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
           <NavLink to="/settings"  className={mobileLinkClass} onClick={() => setMenuOpen(false)}>Settings</NavLink>
           <NavLink to="/billing"   className={mobileLinkClass} onClick={() => setMenuOpen(false)}>Billing</NavLink>
+          {user?.email && (
+            <div className="px-4 py-2 text-xs text-gray-400 border-b border-gray-100">{user.email}</div>
+          )}
           <button
             onClick={() => { setMenuOpen(false); handleSignOut(); }}
             className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"

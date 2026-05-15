@@ -154,13 +154,33 @@ export default function Dashboard() {
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {/* Page header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
             <p className="text-sm text-gray-500 mt-0.5">
               {loading ? <span className="inline-block h-4 w-12 bg-gray-200 rounded animate-pulse align-middle" /> : `${total} total`}
             </p>
           </div>
+        </div>
+
+        {/* Stats strip */}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {[
+            { label: 'Leads this week', val: stats?.this_week, suffix: '' },
+            { label: 'Avg. score',      val: stats?.avg_score,  suffix: '/10' },
+            { label: 'Total wins',      val: stats?.wins,        suffix: '' },
+          ].map(({ label, val, suffix }) => (
+            <div key={label} className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+              <p className="text-xs text-gray-500 mb-1">{label}</p>
+              <p className="text-2xl font-bold text-gray-900 leading-none">
+                {stats === null
+                  ? <span className="inline-block h-6 w-10 bg-gray-100 rounded animate-pulse" />
+                  : val == null ? '—'
+                  : <>{val}{suffix}</>
+                }
+              </p>
+            </div>
+          ))}
         </div>
 
         {/* Search + date filter */}
@@ -190,26 +210,6 @@ export default function Dashboard() {
             <option value="week">Last 7 days</option>
             <option value="month">Last 30 days</option>
           </select>
-        </div>
-
-        {/* Stats strip */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            { label: 'Leads this week', val: stats?.this_week, suffix: '' },
-            { label: 'Avg. score',      val: stats?.avg_score,  suffix: '/10' },
-            { label: 'Total wins',      val: stats?.wins,        suffix: '' },
-          ].map(({ label, val, suffix }) => (
-            <div key={label} className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-              <p className="text-xs text-gray-500 mb-1">{label}</p>
-              <p className="text-2xl font-bold text-gray-900 leading-none">
-                {stats === null
-                  ? <span className="inline-block h-6 w-10 bg-gray-100 rounded animate-pulse" />
-                  : val == null ? '—'
-                  : <>{val}{suffix}</>
-                }
-              </p>
-            </div>
-          ))}
         </div>
 
         {/* Extension not connected warning */}

@@ -1,131 +1,126 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProfile, updateProfile, getKeywords, addKeyword, deleteKeyword, getGroups, deleteAccount, exportLeads } from '../lib/api';
+import { getProfile, updateProfile, exportLeads, deleteAccount } from '../lib/api';
 import supabase from '../lib/supabase';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function friendlyError(err) {
+  const msg = err?.message || '';
+  if (/network|fetch|failed to fetch/i.test(msg)) return 'Connection error. Check your internet.';
+  if (/401|unauthorized/i.test(msg))               return 'Session expired. Please sign in again.';
+  if (/subscription/i.test(msg))                   return 'An active subscription is required.';
+  if (msg.length > 0 && msg.length < 120)          return msg;
+  return 'Something went wrong. Please try again.';
+}
+
+// Inline feedback — auto-clears after 3 s on success
+function useFeedback() {
+  const [msg, setMsg] = useState({ type: '', text: '' });
+  function flash(type, text) {
+    setMsg({ type, text });
+    if (type === 'success') setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+  }
+  return [msg, flash];
+}
+
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${checked ? 'bg-orange-500' : 'bg-gray-200'}`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  );
+}
+
+// ── Settings page ─────────────────────────────────────────────────────────────
 
 export default function Settings() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [saveMsg, setSaveMsg] = useState('');
-  const [error, setError]     = useState('');
 
-  // Data export
-  const [exporting, setExporting] = useState(false);
+  // Business Profile form
+  const [bizName,        setBizName]        = useState('');
+  const [serviceDesc,    setServiceDesc]    = useState('');
+  const [websiteUrl,     setWebsiteUrl]     = useState('');
+  const [includeWebsite, setIncludeWebsite] = useState(false);
+  const [savingProfile,  setSavingProfile]  = useState(false);
+  const [profileMsg,     flashProfile]      = useFeedback();
 
-  // Account deletion
-  const [deleteStep, setDeleteStep]   = useState(0);
+  // Alerts form
+  const [phone,        setPhone]        = useState('');
+  const [alertChannel, setAlertChannel] = useState('sms');
+  const [savingAlerts, setSavingAlerts] = useState(false);
+  const [alertsMsg,    flashAlerts]     = useFeedback();
+
+  // Data / account
+  const [exporting,   setExporting]   = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [deleteStep,  setDeleteStep]  = useState(0);
   const [deleteError, setDeleteError] = useState('');
 
-  // Profile — only the fields we expose
-  const [serviceDescription, setServiceDescription] = useState('');
-  const [phoneNumber, setPhoneNumber]               = useState('');
-  const [alertChannel, setAlertChannel]             = useState('sms');
-  const [includeWebsite, setIncludeWebsite]         = useState(false);
-  const [websiteUrl, setWebsiteUrl]                 = useState('');
-  const [savingProfile, setSavingProfile]           = useState(false);
-
-  // Keywords
-  const [keywords, setKeywords]         = useState([]);
-  const [keywordInput, setKeywordInput] = useState('');
-  const [savingKeyword, setSavingKeyword] = useState(false);
-
-  // Groups (read-only)
-  const [groups, setGroups] = useState([]);
+  // ── Load ───────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [profile, kws, grps] = await Promise.all([getProfile(), getKeywords(), getGroups()]);
-        setServiceDescription(profile.service_description ?? '');
-        setPhoneNumber(profile.phone_number ?? '');
-        setAlertChannel(profile.alert_channel ?? 'sms');
-        setIncludeWebsite(profile.include_website_in_replies ?? false);
-        setWebsiteUrl(profile.website_url ?? '');
-        setKeywords(kws);
-        setGroups(grps);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+    getProfile()
+      .then((p) => {
+        setBizName(p.business_name                  ?? '');
+        setServiceDesc(p.service_description        ?? '');
+        setWebsiteUrl(p.website_url                 ?? '');
+        setIncludeWebsite(p.include_website_in_replies ?? false);
+        setPhone(p.phone_number                     ?? '');
+        setAlertChannel(p.alert_channel             ?? 'sms');
+      })
+      .catch((err) => flashProfile('error', friendlyError(err)))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function flash(msg) {
-    setSaveMsg(msg);
-    setTimeout(() => setSaveMsg(''), 3000);
-  }
+  // ── Save handlers ──────────────────────────────────────────────────────────
 
-  // ── Profile save ─────────────────────────────────────────────────────────────
   async function handleSaveProfile(e) {
     e.preventDefault();
-    setError('');
     setSavingProfile(true);
     try {
       await updateProfile({
-        service_description:        serviceDescription,
-        phone_number:               phoneNumber,
-        alert_channel:              alertChannel,
+        business_name:              bizName.trim(),
+        service_description:        serviceDesc.trim(),
+        website_url:                websiteUrl.trim(),
         include_website_in_replies: includeWebsite,
-        website_url:                websiteUrl,
       });
-      flash('Settings saved');
+      flashProfile('success', '✓ Profile saved');
     } catch (err) {
-      setError(err.message);
+      flashProfile('error', friendlyError(err));
     } finally {
       setSavingProfile(false);
     }
   }
 
-  // ── Keyword actions ───────────────────────────────────────────────────────────
-  async function handleAddKeyword() {
-    const kw = keywordInput.trim();
-    if (!kw) return;
-    setSavingKeyword(true);
-    setError('');
+  async function handleSaveAlerts(e) {
+    e.preventDefault();
+    setSavingAlerts(true);
     try {
-      const added = await addKeyword(kw);
-      setKeywords((k) => [...k, added]);
-      setKeywordInput('');
-
-      // Sync to chrome.storage if running inside the extension
-      if (typeof chrome !== 'undefined' && chrome?.storage?.sync) {
-        chrome.storage.sync.get('keywords', (d) => {
-          const current = d.keywords || [];
-          chrome.storage.sync.set({ keywords: [...current, kw] });
-        });
-      }
+      await updateProfile({ phone_number: phone.trim(), alert_channel: alertChannel });
+      flashAlerts('success', '✓ Alert settings saved');
     } catch (err) {
-      setError(err.message);
+      flashAlerts('error', friendlyError(err));
     } finally {
-      setSavingKeyword(false);
+      setSavingAlerts(false);
     }
   }
 
-  async function handleDeleteKeyword(id, keyword) {
-    setError('');
-    try {
-      await deleteKeyword(id);
-      setKeywords((k) => k.filter((x) => x.id !== id));
+  // ── Export ─────────────────────────────────────────────────────────────────
 
-      // Sync removal to chrome.storage if running inside the extension
-      if (typeof chrome !== 'undefined' && chrome?.storage?.sync) {
-        chrome.storage.sync.get('keywords', (d) => {
-          const current = d.keywords || [];
-          chrome.storage.sync.set({ keywords: current.filter((k) => k !== keyword) });
-        });
-      }
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  // ── CSV export ───────────────────────────────────────────────────────────────
   async function handleExport() {
     setExporting(true);
-    setError('');
+    setExportError('');
     try {
       const blob = await exportLeads();
       const url  = URL.createObjectURL(blob);
@@ -135,13 +130,14 @@ export default function Settings() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message);
+      setExportError(friendlyError(err));
     } finally {
       setExporting(false);
     }
   }
 
-  // ── Account deletion ──────────────────────────────────────────────────────────
+  // ── Delete account ─────────────────────────────────────────────────────────
+
   async function handleDeleteAccount() {
     setDeleteStep(2);
     setDeleteError('');
@@ -150,23 +146,38 @@ export default function Settings() {
       await supabase.auth.signOut();
       navigate('/');
     } catch (err) {
-      setDeleteError(err.message);
+      setDeleteError(friendlyError(err));
       setDeleteStep(1);
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
-  const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500';
+  // ── Shared styles ──────────────────────────────────────────────────────────
 
-  const pillBase = 'px-4 py-2 rounded-full text-sm font-medium border transition-colors min-h-[44px]';
-  const pillActive = 'border-orange-500 bg-orange-50 text-orange-700';
-  const pillInactive = 'border-gray-300 bg-white text-gray-500 hover:border-orange-400 hover:text-orange-600';
+  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white';
+
+  function Feedback({ msg }) {
+    if (!msg.text) return null;
+    const cls = msg.type === 'success'
+      ? 'bg-green-50 text-green-700 border border-green-200'
+      : 'bg-red-50 text-red-700 border border-red-200';
+    return <p className={`text-sm px-3 py-2 rounded-lg mt-3 ${cls}`}>{msg.text}</p>;
+  }
+
+  function SectionHeader({ children }) {
+    return (
+      <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+        {children}
+      </h2>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Loading…</div>
+        <div className="flex items-center justify-center py-24 text-gray-400 text-sm">Loading…</div>
       </div>
     );
   }
@@ -178,221 +189,185 @@ export default function Settings() {
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
 
-        {error && (
-          <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg border border-red-200">{error}</div>
-        )}
-        {saveMsg && (
-          <div className="bg-green-50 text-green-700 text-sm px-4 py-3 rounded-lg border border-green-200">{saveMsg}</div>
-        )}
-
-        {/* ── Monitoring section ── */}
+        {/* ── Business Profile ─────────────────────────────────────────── */}
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Monitoring</h2>
-
-          {/* Keywords */}
-          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-4">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">Keywords</h3>
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={keywordInput}
-                onChange={(e) => setKeywordInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddKeyword(); } }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                placeholder="e.g. lawn mowing"
-              />
-              <button
-                onClick={handleAddKeyword}
-                disabled={savingKeyword || !keywordInput.trim()}
-                className="bg-orange-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors shrink-0 min-h-[44px]"
-              >
-                Add
-              </button>
-            </div>
-            {keywords.length === 0 ? (
-              <p className="text-sm text-gray-400">No keywords yet.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {keywords.map((kw) => (
-                  <span key={kw.id} className="flex items-center gap-1 bg-orange-50 text-orange-700 text-sm px-3 py-1.5 rounded-full border border-orange-200">
-                    {kw.keyword}
-                    <button
-                      onClick={() => handleDeleteKeyword(kw.id, kw.keyword)}
-                      className="text-orange-400 hover:text-red-500 ml-1 leading-none transition-colors p-0.5"
-                      aria-label={`Remove ${kw.keyword}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Groups — read-only */}
+          <SectionHeader>Business Profile</SectionHeader>
           <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-1">Facebook groups</h3>
-            <p className="text-sm text-gray-500 mb-4">Manage groups through the extension — they're auto-detected from your Facebook account.</p>
-            {groups.length === 0 ? (
-              <p className="text-sm text-gray-400">No groups synced yet. Open the extension to connect Facebook.</p>
-            ) : (
-              <ul className="space-y-2">
-                {groups.map((g) => (
-                  <li key={g.id} className="flex items-center gap-3 bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-200">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{g.group_name || 'Unnamed group'}</p>
-                      <p className="text-xs text-gray-400 truncate">{g.facebook_group_url}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+            <form onSubmit={handleSaveProfile} className="space-y-5">
 
-        {/* ── Alerts section ── */}
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Alerts</h2>
-
-          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <form onSubmit={handleSaveProfile} className="space-y-6">
-
-              {/* Ideal lead description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ideal lead description</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Business name</label>
+                <input
+                  type="text"
+                  value={bizName}
+                  onChange={(e) => setBizName(e.target.value)}
+                  className={inputCls}
+                  placeholder="e.g. Austin Lawn Care"
+                  maxLength={200}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Service description</label>
                 <textarea
-                  value={serviceDescription}
-                  onChange={(e) => setServiceDescription(e.target.value)}
-                  rows={3}
-                  className={`${inputClass} resize-none`}
-                  placeholder="Describe the kind of customer or job request you're looking for…"
+                  value={serviceDesc}
+                  onChange={(e) => setServiceDesc(e.target.value)}
+                  rows={4}
+                  className={`${inputCls} resize-none`}
+                  placeholder="Describe what you do and who your ideal customer is — this is used to generate personalised AI replies"
+                  maxLength={2000}
                 />
                 <p className="text-xs text-gray-400 mt-1">Used to score leads and generate personalised AI replies.</p>
               </div>
 
-              {/* Phone number */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone number (SMS alerts)</label>
-                <input
-                  type="tel"
-                  autoComplete="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className={inputClass}
-                  placeholder="+1 555 000 0000"
-                />
-              </div>
-
-              {/* Alert channel */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Alert channel</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAlertChannel('sms')}
-                    className={`${pillBase} ${alertChannel === 'sms' ? pillActive : pillInactive}`}
-                  >
-                    SMS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAlertChannel('whatsapp')}
-                    className={`${pillBase} ${alertChannel === 'whatsapp' ? pillActive : pillInactive}`}
-                  >
-                    WhatsApp
-                  </button>
-                </div>
-              </div>
-
-              {/* Website in replies */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Website in replies</label>
-                <div className="flex items-center gap-3 mb-3">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={includeWebsite}
-                    onClick={() => setIncludeWebsite((v) => !v)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${includeWebsite ? 'bg-orange-500' : 'bg-gray-200'}`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${includeWebsite ? 'translate-x-6' : 'translate-x-1'}`}
-                    />
-                  </button>
-                  <span className="text-sm text-gray-600">{includeWebsite ? 'Include website URL in AI replies' : 'Don\'t include website in replies'}</span>
-                </div>
-                {includeWebsite && (
+                <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
+                <div className="flex items-center gap-3">
                   <input
                     type="url"
                     value={websiteUrl}
                     onChange={(e) => setWebsiteUrl(e.target.value)}
-                    className={inputClass}
+                    className={`${inputCls} flex-1 min-w-0`}
                     placeholder="https://yourbusiness.com"
                   />
-                )}
+                  <label className="flex items-center gap-2 shrink-0 cursor-pointer select-none">
+                    <Toggle checked={includeWebsite} onChange={setIncludeWebsite} />
+                    <span className="text-sm text-gray-600 whitespace-nowrap">In replies</span>
+                  </label>
+                </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={savingProfile}
-                className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]"
-              >
-                {savingProfile ? 'Saving…' : 'Save settings'}
-              </button>
+              <div>
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]"
+                >
+                  {savingProfile ? 'Saving…' : 'Save profile'}
+                </button>
+                <Feedback msg={profileMsg} />
+              </div>
+
             </form>
           </section>
         </div>
 
-        {/* Data export */}
-        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Export your data</h2>
-          <p className="text-sm text-gray-500 mb-4">Download all your leads as a CSV file.</p>
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]"
-          >
-            {exporting ? 'Preparing…' : 'Download leads CSV'}
-          </button>
-        </section>
+        {/* ── Alerts ───────────────────────────────────────────────────── */}
+        <div>
+          <SectionHeader>Alerts</SectionHeader>
+          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <form onSubmit={handleSaveAlerts} className="space-y-5">
 
-        {/* Danger zone */}
-        <section className="bg-white rounded-xl border border-red-200 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-red-700 mb-1">Danger zone</h2>
-          <p className="text-sm text-gray-500 mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>
-
-          {deleteStep === 0 && (
-            <button
-              onClick={() => setDeleteStep(1)}
-              className="border border-red-300 text-red-600 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors min-h-[44px]"
-            >
-              Delete account
-            </button>
-          )}
-
-          {deleteStep >= 1 && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-medium text-red-800">Are you sure? This will permanently delete your account, all leads, keywords, and groups.</p>
-              {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
-              <div className="flex gap-3">
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={deleteStep === 2}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors min-h-[44px]"
-                >
-                  {deleteStep === 2 ? 'Deleting…' : 'Yes, delete my account'}
-                </button>
-                <button
-                  onClick={() => { setDeleteStep(0); setDeleteError(''); }}
-                  disabled={deleteStep === 2}
-                  className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors min-h-[44px]"
-                >
-                  Cancel
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={inputCls}
+                  placeholder="+1 555 000 0000"
+                />
+                <p className="text-xs text-gray-400 mt-1">You'll receive an alert whenever a matching lead is found.</p>
               </div>
-            </div>
-          )}
-        </section>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Alert channel</label>
+                <div className="flex gap-2">
+                  {[{ value: 'sms', label: 'SMS' }, { value: 'whatsapp', label: 'WhatsApp' }].map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setAlertChannel(value)}
+                      className={`px-5 py-2 rounded-full text-sm font-medium border transition-colors min-h-[44px] ${
+                        alertChannel === value
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
+                          : 'border-gray-300 bg-white text-gray-500 hover:border-orange-400 hover:text-orange-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={savingAlerts}
+                  className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]"
+                >
+                  {savingAlerts ? 'Saving…' : 'Save alerts'}
+                </button>
+                <Feedback msg={alertsMsg} />
+              </div>
+
+            </form>
+          </section>
+        </div>
+
+        {/* ── Data ─────────────────────────────────────────────────────── */}
+        <div>
+          <SectionHeader>Data</SectionHeader>
+
+          {/* Export */}
+          <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-4">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Export leads</h3>
+            <p className="text-sm text-gray-500 mb-4">Download all your leads as a CSV file.</p>
+            {exportError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{exportError}</p>
+            )}
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors min-h-[44px]"
+            >
+              {exporting ? 'Preparing…' : 'Download leads CSV'}
+            </button>
+          </section>
+
+          {/* Delete account */}
+          <section className="bg-white rounded-xl border border-red-200 shadow-sm p-6">
+            <h3 className="text-base font-semibold text-red-700 mb-1">Delete account</h3>
+            <p className="text-sm text-gray-500 mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>
+
+            {deleteStep === 0 && (
+              <button
+                onClick={() => setDeleteStep(1)}
+                className="border border-red-300 text-red-600 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors min-h-[44px]"
+              >
+                Delete account…
+              </button>
+            )}
+
+            {deleteStep >= 1 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-red-800">
+                  Are you sure? This will permanently delete your account, all leads, keywords, and groups.
+                </p>
+                {deleteError && (
+                  <p className="text-xs text-red-600">{deleteError}</p>
+                )}
+                <div className="flex gap-3 flex-wrap">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleteStep === 2}
+                    className="bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors min-h-[44px]"
+                  >
+                    {deleteStep === 2 ? 'Deleting…' : 'Yes, delete my account'}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteStep(0); setDeleteError(''); }}
+                    disabled={deleteStep === 2}
+                    className="border border-gray-300 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors min-h-[44px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
 
       </div>
     </div>

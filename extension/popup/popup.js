@@ -80,6 +80,10 @@ async function init() {
 
   showView('logged-in');
 
+  // Sync latest profile from backend → chrome.storage.sync (non-blocking)
+  // This ensures changes made on the web dashboard are reflected in the extension.
+  fetchAndSyncProfile().catch(() => {});
+
   // Load status tab data (default tab)
   await loadStatus();
 
@@ -955,6 +959,26 @@ toggleScanning.addEventListener('change', (e) => {
     setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
   }
 });
+
+// ── Profile sync (backend → chrome.storage.sync) ─────────────────────────────
+// Called on every popup open so web-dashboard changes are picked up automatically.
+
+async function fetchAndSyncProfile() {
+  if (!token) return;
+  try {
+    const profile = await getProfile(token);
+    const updates = {};
+    if (profile.phone_number              !== undefined) updates.phone_number              = profile.phone_number;
+    if (profile.alert_channel)                           updates.alert_channel             = profile.alert_channel;
+    if (profile.website_url               !== undefined) updates.website_url               = profile.website_url;
+    if (profile.include_website_in_replies !== undefined) updates.include_website_in_replies = profile.include_website_in_replies;
+    if (profile.business_name             !== undefined) updates.business_name             = profile.business_name;
+    if (profile.service_description       !== undefined) updates.ai_description            = profile.service_description;
+    if (Object.keys(updates).length) await chrome.storage.sync.set(updates);
+  } catch (err) {
+    console.warn('[LeadSnap] fetchAndSyncProfile failed:', err.message);
+  }
+}
 
 // ── Go ────────────────────────────────────────────────────────────────────────
 init();

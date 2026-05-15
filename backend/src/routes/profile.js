@@ -26,19 +26,28 @@ router.get('/', requireAuth, async (req, res, next) => {
 // PUT /api/profile
 router.put('/', requireAuth, async (req, res, next) => {
   try {
-    const { business_name, service_description, phone_number, timezone } = req.body;
+    const {
+      business_name, service_description, phone_number, timezone,
+      alert_channel, website_url, include_website_in_replies,
+    } = req.body;
 
     // Length guards — prevent oversized strings reaching Claude or the DB
-    if (business_name     !== undefined && String(business_name).length     > 200)  return res.status(400).json({ error: 'business_name must be 200 characters or fewer' });
+    if (business_name       !== undefined && String(business_name).length       > 200)  return res.status(400).json({ error: 'business_name must be 200 characters or fewer' });
     if (service_description !== undefined && String(service_description).length > 2000) return res.status(400).json({ error: 'service_description must be 2000 characters or fewer' });
-    if (phone_number      !== undefined && String(phone_number).length      > 30)   return res.status(400).json({ error: 'phone_number must be 30 characters or fewer' });
-    if (timezone          !== undefined && String(timezone).length          > 60)   return res.status(400).json({ error: 'timezone must be 60 characters or fewer' });
+    if (phone_number        !== undefined && String(phone_number).length        > 30)   return res.status(400).json({ error: 'phone_number must be 30 characters or fewer' });
+    if (timezone            !== undefined && String(timezone).length            > 60)   return res.status(400).json({ error: 'timezone must be 60 characters or fewer' });
+    if (website_url         !== undefined && String(website_url).length         > 500)  return res.status(400).json({ error: 'website_url must be 500 characters or fewer' });
+    if (alert_channel       !== undefined && !['sms', 'whatsapp'].includes(alert_channel))
+      return res.status(400).json({ error: 'alert_channel must be sms or whatsapp' });
 
     const updates = {};
-    if (business_name !== undefined) updates.business_name = business_name;
-    if (service_description !== undefined) updates.service_description = service_description;
-    if (phone_number !== undefined) updates.phone_number = phone_number;
-    if (timezone !== undefined) updates.timezone = timezone;
+    if (business_name             !== undefined) updates.business_name             = business_name;
+    if (service_description       !== undefined) updates.service_description       = service_description;
+    if (phone_number              !== undefined) updates.phone_number              = phone_number;
+    if (timezone                  !== undefined) updates.timezone                  = timezone;
+    if (alert_channel             !== undefined) updates.alert_channel             = alert_channel;
+    if (website_url               !== undefined) updates.website_url               = website_url;
+    if (include_website_in_replies !== undefined) updates.include_website_in_replies = !!include_website_in_replies;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No fields to update' });

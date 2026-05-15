@@ -16,6 +16,12 @@ const SCORE_COLOR = (score) => {
   return 'text-red-500 bg-red-50 border-red-200';
 };
 
+const QUICK_ACTIONS = [
+  { value: 'replied', label: 'Mark replied', cls: 'border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300' },
+  { value: 'won',     label: 'Won ✓',        cls: 'border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300' },
+  { value: 'lost',    label: 'Lost',          cls: 'border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300' },
+];
+
 function timeAgo(isoDate) {
   const diff = Date.now() - new Date(isoDate).getTime();
   const mins = Math.floor(diff / 60000);
@@ -27,13 +33,13 @@ function timeAgo(isoDate) {
 }
 
 export default function LeadCard({ lead, onStatusChange }) {
-  const [status, setStatus]       = useState(lead.status);
-  const [updating, setUpdating]   = useState(false);
-  const [copied, setCopied]       = useState(false);
-  const [expanded, setExpanded]   = useState(false);
+  const [status, setStatus]     = useState(lead.status);
+  const [updating, setUpdating] = useState(false);
+  const [copied, setCopied]     = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  async function handleStatusChange(e) {
-    const newStatus = e.target.value;
+  async function applyStatus(newStatus) {
+    if (newStatus === status || updating) return;
     setUpdating(true);
     try {
       await onStatusChange(lead.id, newStatus);
@@ -41,6 +47,10 @@ export default function LeadCard({ lead, onStatusChange }) {
     } finally {
       setUpdating(false);
     }
+  }
+
+  async function handleStatusChange(e) {
+    await applyStatus(e.target.value);
   }
 
   async function copyReply() {
@@ -73,7 +83,7 @@ export default function LeadCard({ lead, onStatusChange }) {
             </span>
           )}
           {/* Group */}
-          <span className="text-xs text-gray-500">
+          <span className="text-xs font-medium text-gray-600">
             {lead.group_name ?? 'Unknown group'}
           </span>
           {lead.author_name && (
@@ -133,20 +143,29 @@ export default function LeadCard({ lead, onStatusChange }) {
         </div>
       )}
 
-      {/* Footer links */}
-      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
+      {/* Quick actions + view link */}
+      <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+        {QUICK_ACTIONS.map(({ value, label, cls }) =>
+          status !== value ? (
+            <button
+              key={value}
+              onClick={() => applyStatus(value)}
+              disabled={updating}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${cls}`}
+            >
+              {label}
+            </button>
+          ) : null
+        )}
         {lead.post_url && (
           <a
             href={lead.post_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-orange-500 hover:text-orange-700 py-1"
+            className="ml-auto text-xs text-orange-500 hover:text-orange-700 py-1 font-medium"
           >
             View post →
           </a>
-        )}
-        {lead.score != null && lead.score >= 8 && (
-          <span className="text-xs text-orange-500 font-medium">High intent</span>
         )}
       </div>
     </div>
