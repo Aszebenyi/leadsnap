@@ -2,9 +2,12 @@
 import {
   getAuthToken, getRefreshToken, setSession, clearSession,
   getSelectedGroups, getKeywords, getScanningEnabled,
-  getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
+  getSubscriptionStatus, setSubscriptionStatus, setLastScanAt, getLastScanAt,
   getAiDescription, getWebsiteUrl, getIncludeWebsite, getAlertChannel,
   isOnboardingComplete, getScanMaxAgeHours,
+  getScanState, setScanState,
+  getManualScanAgeHours,
+  incrementLeadsFoundToday,
 } from './utils/storage.js';
 import { ingestLead, heartbeat } from './utils/api.js';
 import { refreshToken, getUser, signInWithGoogle } from './utils/supabase-auth.js';
@@ -59,27 +62,58 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // ── Scan cycle ────────────────────────────────────────────────────────────────
 
 /**
- * @param {object} opts
- * @param {boolean} opts.silent       - true → skip SMS + Chrome notifications (manual/initial scan)
- * @param {number|null} opts.monitorTabId - tab ID of the monitor window to send progress to
+ * Core scan loop.
+ * @param {object}       opts
+ * @param {boolean}      opts.silent       - true → skip SMS + Chrome notifications
+ * @param {boolean}      opts.isManual     - true → write scan_state + animate icon
+ * @param {number|null}  opts.maxAgeHours  - hours to look back; null = auto-select
  */
-async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
-  console.log('[LeadSnap] Scan cycle started', silent ? '(silent)' : '');
+async function runScanCycle({ silent = false, isManual = false, maxAgeHours = null } = {}) {
+  console.log('[LeadSnap] Scan cycle started', isManual ? '(manual)' : '(alarm)', `maxAgeHours=${maxAgeHours}`);
+
+  // ── First-scan detection ─────────────────────────────────────────────────────
+  const lastScanAt = await getLastScanAt();
+  if (!lastScanAt) {
+    console.log('[LeadSnap] First scan detected — using 7-day window');
+    maxAgeHours = 168;
+  } else if (maxAgeHours === null) {
+    maxAgeHours = await getScanMaxAgeHours();
+  }
 
   // ── Pre-flight checks ────────────────────────────────────────────────────────
 
   const token = await getAuthToken();
   if (!token) {
     console.log('[LeadSnap] No auth token — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'not-signed-in', message: 'You\'re not signed in. Please sign in and try again.' });
+    if (isManual) await setScanState({ status: 'blocked', blocked_reason: 'not-signed-in', blocked_message: 'You\'re not signed in. Please sign in and try again.' });
+    stopScanAnimation();
     return;
   }
 
   const enabled = await getScanningEnabled();
   if (!enabled) {
     console.log('[LeadSnap] Scanning disabled — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'scanning-disabled', message: 'Scanning is turned off. Enable it in Settings.' });
+    if (isManual) await setScanState({ status: 'blocked', blocked_reason: 'scanning-disabled', blocked_message: 'Scanning is turned off. Enable it in the Status tab.' });
+    stopScanAnimation();
     return;
+  }
+
+  // ── Facebook session check ───────────────────────────────────────────────────
+  if (chrome.cookies) {
+    try {
+      const fbCookie = await chrome.cookies.get({ url: 'https://www.facebook.com', name: 'c_user' });
+      if (!fbCookie) {
+        console.log('[LeadSnap] Facebook session cookie not found — user may not be logged into Facebook');
+        if (isManual) {
+          await setScanState({ status: 'blocked', blocked_reason: 'not-logged-into-facebook', blocked_message: 'Please log into Facebook first, then try again.' });
+          stopScanAnimation();
+          return;
+        }
+        // For alarm scans, skip silently — don't block if they're just not on Facebook yet
+      }
+    } catch (err) {
+      console.warn('[LeadSnap] Could not check Facebook cookie:', err.message);
+    }
   }
 
   // Subscription: use cache unless stale (older than 1 hour)
@@ -90,54 +124,85 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   }
   if (!isSubscriptionAllowed(status)) {
     console.log('[LeadSnap] Subscription inactive — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'subscription-required', message: 'Your trial has ended. Subscribe to continue scanning.' });
+    if (isManual) await setScanState({ status: 'blocked', blocked_reason: 'subscription-required', blocked_message: 'Your trial has ended. Subscribe to continue scanning.' });
+    stopScanAnimation();
     return;
   }
 
-  const [groups, keywords, maxAgeHours] = await Promise.all([getSelectedGroups(), getKeywords(), getScanMaxAgeHours()]);
+  const [groups, keywords] = await Promise.all([getSelectedGroups(), getKeywords()]);
   if (!groups.length) {
     console.log('[LeadSnap] No groups selected — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'no-groups', message: 'No groups selected. Go to Settings → Groups to add some.' });
+    if (isManual) await setScanState({ status: 'blocked', blocked_reason: 'no-groups', blocked_message: 'No groups selected. Go to Settings → Groups to add some.' });
+    stopScanAnimation();
     return;
   }
   if (!keywords.length) {
     console.log('[LeadSnap] No keywords configured — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'no-keywords', message: 'No keywords configured. Go to Settings → Keywords to add some.' });
+    if (isManual) await setScanState({ status: 'blocked', blocked_reason: 'no-keywords', blocked_message: 'No keywords configured. Go to Settings → Keywords to add some.' });
+    stopScanAnimation();
     return;
   }
 
-  // ── Message already-open Facebook group tabs ─────────────────────────────────
-  // We never open new tabs. The extension works by running content scripts on
-  // Facebook pages the user already has open. The passive MutationObserver in
-  // content.js handles real-time detection as the user browses. This alarm-based
-  // scan is a supplementary pass over any group tabs already open right now.
+  // ── Find open Facebook group tabs ────────────────────────────────────────────
+  // For manual scans: if none are open, auto-open the first monitored group.
+  // For alarm scans: skip silently — passive observer handles it.
 
-  const openGroupTabs = await chrome.tabs.query({ url: 'https://www.facebook.com/groups/*' });
-
-  console.log(`[LeadSnap] Open Facebook group tabs: ${openGroupTabs.length}`, openGroupTabs.map((t) => t.url));
   console.log(`[LeadSnap] Monitored groups (${groups.length}):`, groups.map((g) => g.url || g.facebook_group_url || g));
   console.log(`[LeadSnap] Keywords (${keywords.length}):`, keywords.map((k) => (typeof k === 'string' ? k : k.keyword)));
 
+  let openGroupTabs = await chrome.tabs.query({ url: 'https://www.facebook.com/groups/*' });
+  console.log(`[LeadSnap] Open Facebook group tabs: ${openGroupTabs.length}`, openGroupTabs.map((t) => t.url));
+
+  if (!openGroupTabs.length && isManual) {
+    // Auto-open the first monitored group
+    const firstGroupRaw = groups[0];
+    const firstGroupUrl = typeof firstGroupRaw === 'string'
+      ? firstGroupRaw
+      : (firstGroupRaw?.url || firstGroupRaw?.facebook_group_url);
+
+    if (firstGroupUrl) {
+      console.log('[LeadSnap] No FB tabs open — auto-opening:', firstGroupUrl);
+      await setScanState({ status: 'opening-facebook', started_at: Date.now(), progress: null });
+
+      try {
+        const newTab = await chrome.tabs.create({ url: firstGroupUrl, active: true });
+        await waitForTabComplete(newTab.id, 15000);
+        await sleep(2500); // let content scripts initialise
+        openGroupTabs = await chrome.tabs.query({ url: 'https://www.facebook.com/groups/*' });
+        console.log(`[LeadSnap] After auto-open: ${openGroupTabs.length} group tab(s)`);
+      } catch (err) {
+        console.warn('[LeadSnap] Failed to auto-open Facebook group:', err.message);
+      }
+    }
+  }
+
   if (!openGroupTabs.length) {
     console.log('[LeadSnap] No Facebook group tabs open — passive observer will catch leads when user visits groups');
-    sendToMonitor(monitorTabId, { type: 'SCAN_NO_TABS' });
+    if (isManual) await setScanState({ status: 'blocked', blocked_reason: 'no-tabs', blocked_message: 'No Facebook group tabs could be opened. Please open one of your monitored groups manually.' });
+    stopScanAnimation();
     return;
   }
 
-  let totalFound = 0;
+  // ── Scan each open group tab ──────────────────────────────────────────────────
+
+  let totalFound        = 0;
+  let totalPostsChecked = 0;
   let skippedNotMonitored = 0;
+
+  if (isManual) {
+    await setScanState({ status: 'scanning',
+      progress: { current: 0, total: openGroupTabs.length, group_name: '' } });
+  }
 
   for (let i = 0; i < openGroupTabs.length; i++) {
     if (manualScanCancelled) break;
 
     const tab = openGroupTabs[i];
 
-    sendToMonitor(monitorTabId, {
-      type:      'SCAN_PROGRESS',
-      groupName: tab.title || tab.url,
-      current:   i + 1,
-      total:     openGroupTabs.length,
-    });
+    if (isManual) {
+      await setScanState({ status: 'scanning',
+        progress: { current: i + 1, total: openGroupTabs.length, group_name: tab.title || tab.url } });
+    }
 
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
@@ -147,9 +212,8 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
         silent,
         maxAgeHours,
       });
-      if (response?.found) {
-        totalFound += response.found;
-      }
+      if (response?.found)         totalFound        += response.found;
+      if (response?.posts_checked) totalPostsChecked += response.posts_checked;
       if (response?.status === 'skipped') {
         console.log(`[LeadSnap] Tab ${tab.id} skipped — ${response.reason} (${tab.url})`);
         if (response.reason === 'group not monitored') skippedNotMonitored++;
@@ -160,51 +224,48 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   }
 
   await setLastScanAt(Date.now());
-  // Notify backend so dashboard can show "extension connected" status (token already in scope)
+  // Notify backend so dashboard can show "extension connected" status
   if (token) heartbeat(token).catch(() => {});
-  console.log(`[LeadSnap] Scan cycle complete — ${totalFound} new lead(s) submitted`);
+  stopScanAnimation();
 
-  sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: totalFound, skippedNotMonitored });
+  console.log(`[LeadSnap] Scan cycle complete — ${totalFound} lead(s), ${totalPostsChecked} posts checked`);
+
+  if (isManual) {
+    await setScanState({
+      status:       'complete',
+      completed_at: Date.now(),
+      progress:     null,
+      result: {
+        found:          totalFound,
+        groups_scanned: openGroupTabs.length - skippedNotMonitored,
+        posts_checked:  totalPostsChecked,
+      },
+    });
+  }
 }
 
-/** Send a message to the monitor window tab, ignoring any errors */
-function sendToMonitor(tabId, message) {
-  if (!tabId) return;
-  chrome.tabs.sendMessage(tabId, message).catch(() => {
-    // Monitor window may have been closed — ignore
-  });
-}
-
-// ── Manual scan (triggered from popup) ───────────────────────────────────────
+// ── Manual scan (triggered from popup or onboarding) ─────────────────────────
 
 let manualScanCancelled = false;
 
-async function runManualScan() {
-  manualScanCancelled = false;
-
-  // Open the monitor window
-  const monitorUrl = chrome.runtime.getURL('monitor/monitor.html');
-  let monitorTabId = null;
-
-  try {
-    const win = await chrome.windows.create({
-      url:    monitorUrl,
-      type:   'popup',
-      width:  420,
-      height: 360,
-      focused: true,
-    });
-    // The new window has exactly one tab
-    monitorTabId = win.tabs?.[0]?.id ?? null;
-  } catch (err) {
-    console.error('[LeadSnap] Could not open monitor window:', err.message);
-    // Fall through — scan will still run, just without the progress window
+async function runManualScan({ maxAgeHours } = {}) {
+  // Guard: don't start a second scan while one is already running
+  const current = await getScanState();
+  if (current.status === 'scanning') {
+    console.log('[LeadSnap] Manual scan requested but a scan is already running');
+    return;
   }
 
-  // Small delay so the monitor page can load and register its message listener
-  await sleep(400);
+  manualScanCancelled = false;
+  const age = maxAgeHours ?? (await getManualScanAgeHours());
 
-  await runScanCycle({ silent: true, monitorTabId });
+  await setScanState({
+    status: 'scanning', started_at: Date.now(),
+    progress: null, result: null, blocked_reason: null,
+  });
+  startScanAnimation();
+
+  await runScanCycle({ silent: true, isManual: true, maxAgeHours: age });
 }
 
 // ── Token validation + refresh ────────────────────────────────────────────────
@@ -281,6 +342,70 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Waits for a tab to reach status 'complete', with a timeout fallback.
+ */
+function waitForTabComplete(tabId, timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, timeoutMs);
+
+    function listener(id, info) {
+      if (id === tabId && info.status === 'complete') {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    }
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+// ── Toolbar icon animation ────────────────────────────────────────────────────
+
+let scanAnimTimer = null;
+
+async function startScanAnimation() {
+  try {
+    const response = await fetch(chrome.runtime.getURL('icons/icon48.png'));
+    const blob     = await response.blob();
+    const bitmap   = await createImageBitmap(blob);
+    let frame = 0;
+
+    function nextFrame() {
+      const canvas = new OffscreenCanvas(48, 48);
+      const ctx    = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0);
+
+      // Draw a spinning arc overlay in brand orange
+      const angle = (frame * 36) % 360;
+      ctx.beginPath();
+      ctx.arc(24, 24, 18, ((angle - 90) * Math.PI) / 180, ((angle + 90) * Math.PI) / 180);
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth   = 4;
+      ctx.lineCap     = 'round';
+      ctx.stroke();
+
+      chrome.action.setIcon({ imageData: { 48: ctx.getImageData(0, 0, 48, 48) } });
+      frame++;
+      scanAnimTimer = setTimeout(nextFrame, 80);
+    }
+
+    nextFrame();
+  } catch (err) {
+    console.warn('[LeadSnap] Icon animation failed:', err.message);
+  }
+}
+
+function stopScanAnimation() {
+  clearTimeout(scanAnimTimer);
+  scanAnimTimer = null;
+  // Reset to static icon
+  chrome.action.setIcon({ path: { 48: 'icons/icon48.png' } });
+}
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 
 function showLeadNotification(lead) {
@@ -299,7 +424,7 @@ function showLeadNotification(lead) {
 function updateBadge(count) {
   const label = count > 0 ? String(count > 99 ? '99+' : count) : '';
   chrome.action.setBadgeText({ text: label });
-  chrome.action.setBadgeBackgroundColor({ color: '#3b82f6' });
+  chrome.action.setBadgeBackgroundColor({ color: '#f97316' });
 }
 
 // ── Messages from content script / popup ─────────────────────────────────────
@@ -323,7 +448,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'LEADSNAP_MANUAL_SCAN') {
-    runManualScan()
+    runManualScan({ maxAgeHours: message.maxAgeHours ?? null })
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ error: err.message }));
     return true;
@@ -331,6 +456,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === 'SCAN_CANCEL') {
     manualScanCancelled = true;
+    stopScanAnimation();
+    setScanState({ status: 'idle' }).catch(() => {});
     sendResponse({ ok: true });
     return;
   }
@@ -414,6 +541,9 @@ async function handleLeadFound(payload) {
     alert_channel:  alertChannel || 'sms',
     skip_sms:       payload.silent === true,
   });
+
+  // Track leads found today (all scans, silent and non-silent)
+  await incrementLeadsFoundToday();
 
   // Only notify user for background (non-silent) scans
   if (!payload.silent) {

@@ -1,30 +1,33 @@
 // chrome.storage helpers
 
 const SYNC_KEYS = {
-  AUTH_TOKEN:           'auth_token',
-  REFRESH_TOKEN_UNUSED: 'refresh_token', // kept for clearSession key reference only
-  USER_ID:              'user_id',
-  USER_EMAIL:           'user_email',
-  KEYWORDS:             'keywords',
-  GROUPS:               'groups',
-  SELECTED_GROUPS:      'selected_groups',
-  SCANNING_ENABLED:     'scanning_enabled',
-  BUSINESS_DESCRIPTION: 'business_description',
-  AI_DESCRIPTION:       'ai_description',
-  ONBOARDING_COMPLETE:  'onboarding_complete',
-  PHONE_NUMBER:         'phone_number',
-  WEBSITE_URL:          'website_url',
-  INCLUDE_WEBSITE:      'include_website_in_replies',
-  ALERT_CHANNEL:        'alert_channel',
-  SCAN_MAX_AGE_HOURS:   'scan_max_age_hours', // 24 | 168 | 720
+  AUTH_TOKEN:            'auth_token',
+  REFRESH_TOKEN_UNUSED:  'refresh_token', // kept for clearSession key reference only
+  USER_ID:               'user_id',
+  USER_EMAIL:            'user_email',
+  KEYWORDS:              'keywords',
+  GROUPS:                'groups',
+  SELECTED_GROUPS:       'selected_groups',
+  SCANNING_ENABLED:      'scanning_enabled',
+  BUSINESS_DESCRIPTION:  'business_description',
+  AI_DESCRIPTION:        'ai_description',
+  ONBOARDING_COMPLETE:   'onboarding_complete',
+  PHONE_NUMBER:          'phone_number',
+  WEBSITE_URL:           'website_url',
+  INCLUDE_WEBSITE:       'include_website_in_replies',
+  ALERT_CHANNEL:         'alert_channel',
+  SCAN_MAX_AGE_HOURS:    'scan_max_age_hours',    // 24 | 168 | 720 — background alarm window
+  MANUAL_SCAN_AGE_HOURS: 'manual_scan_age_hours', // 0.5 | 2 | 24 | 168 — manual scan window
 };
 
 const LOCAL_KEYS = {
-  REFRESH_TOKEN:          'refresh_token',
-  SEEN_POST_IDS:          'seen_post_ids',
-  LAST_SCAN_AT:           'last_scan_at',
-  SUBSCRIPTION_STATUS:    'subscription_status',
-  SUBSCRIPTION_CHECKED_AT:'subscription_checked_at',
+  REFRESH_TOKEN:           'refresh_token',
+  SEEN_POST_IDS:           'seen_post_ids',
+  LAST_SCAN_AT:            'last_scan_at',
+  SUBSCRIPTION_STATUS:     'subscription_status',
+  SUBSCRIPTION_CHECKED_AT: 'subscription_checked_at',
+  SCAN_STATE:              'scan_state',
+  LEADS_TODAY:             'leads_today',
 };
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -153,4 +156,27 @@ export async function clearSession() {
 export async function clearAll() {
   await chrome.storage.sync.clear();
   await chrome.storage.local.clear();
+}
+
+// ── Manual scan age (separate from background alarm window) ──────────────────
+
+// How far back manual "Scan Now" looks: 0.5 (30m), 2 (2h), 24 (24h), 168 (7d). Default 2h.
+export const getManualScanAgeHours = () => syncGet(SYNC_KEYS.MANUAL_SCAN_AGE_HOURS, 2);
+export const setManualScanAgeHours = (v) =>
+  chrome.storage.sync.set({ [SYNC_KEYS.MANUAL_SCAN_AGE_HOURS]: v });
+
+// ── Scan state — written by background, read by popup / onboarding ────────────
+
+export const getScanState = () => localGet(LOCAL_KEYS.SCAN_STATE, { status: 'idle' });
+export const setScanState = (v) => chrome.storage.local.set({ [LOCAL_KEYS.SCAN_STATE]: v });
+
+// ── Leads found today ─────────────────────────────────────────────────────────
+
+export const getLeadsFoundToday = () => localGet(LOCAL_KEYS.LEADS_TODAY, { count: 0, date: '' });
+
+export async function incrementLeadsFoundToday() {
+  const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD' UTC
+  const current  = await getLeadsFoundToday();
+  const count    = current.date === todayStr ? current.count + 1 : 1;
+  return chrome.storage.local.set({ [LOCAL_KEYS.LEADS_TODAY]: { count, date: todayStr } });
 }

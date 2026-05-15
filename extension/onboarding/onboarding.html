@@ -19,7 +19,7 @@
     </div>
     <p class="welcome">Quick setup — takes about 2 minutes.</p>
 
-    <!-- Step indicators (6 dots) -->
+    <!-- Step indicators (7 dots) -->
     <div class="steps">
       <div class="step-dot active" id="dot-1">1</div>
       <div class="step-line"></div>
@@ -32,8 +32,10 @@
       <div class="step-dot" id="dot-5">5</div>
       <div class="step-line"></div>
       <div class="step-dot" id="dot-6">6</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-7">7</div>
     </div>
-    <div class="step-progress-label" id="step-progress-label">Step 1 of 6</div>
+    <div class="step-progress-label" id="step-progress-label">Step 1 of 7</div>
 
     <!-- ── Step 1: Connect Facebook ── -->
     <div class="step-panel visible" id="step-1">
@@ -404,9 +406,48 @@
 
       <div class="action-row" id="step6-action-row">
         <button id="btn-step6-back" class="btn btn-secondary">← Back</button>
-        <button id="btn-start-monitoring" class="btn btn-primary">Start Monitoring →</button>
+        <button id="btn-start-monitoring" class="btn btn-primary">Continue →</button>
       </div>
       <button class="skip-link" id="skip-6">Skip — no SMS alerts</button>
+    </div>
+
+    <!-- ── Step 7: First Scan ── -->
+    <div class="step-panel" id="step-7">
+      <div class="step-title">You're all set! 🎉</div>
+      <p class="step-desc">Want to catch up on recent posts in your groups before LeadSnap starts the regular 10-minute scan?</p>
+
+      <div class="scan-choice-card" id="scan-choice-card">
+        <div class="scan-choice-label">How far back should we look?</div>
+        <div class="scan-time-pills">
+          <button class="scan-time-pill" data-hours="24">24h</button>
+          <button class="scan-time-pill active" data-hours="72">3 days</button>
+          <button class="scan-time-pill" data-hours="168">7 days</button>
+        </div>
+        <button id="btn-scan-now-onboarding" class="btn btn-primary btn-full" style="margin-top:14px">
+          Scan Now
+        </button>
+      </div>
+
+      <!-- Scan progress (hidden initially) -->
+      <div id="onboarding-scan-progress" style="display:none">
+        <div class="onb-progress-wrap">
+          <div class="onb-progress-bar-wrap">
+            <div class="onb-progress-bar-fill" id="onb-progress-fill" style="width:0%"></div>
+          </div>
+          <div class="onb-progress-label" id="onb-progress-label">Starting scan…</div>
+        </div>
+      </div>
+
+      <!-- Scan complete (hidden initially) -->
+      <div id="onboarding-scan-complete" style="display:none">
+        <div class="onb-complete-msg" id="onb-complete-msg">Scan complete!</div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button id="btn-onb-view-dashboard" class="btn btn-primary" style="flex:1">Open Dashboard →</button>
+          <button id="btn-onb-done" class="btn btn-secondary" style="flex:1">Close</button>
+        </div>
+      </div>
+
+      <button class="skip-link" id="btn-skip-scan">No thanks, just monitor from now on</button>
     </div>
 
   </div>

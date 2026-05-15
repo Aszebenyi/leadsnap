@@ -40,12 +40,13 @@
     "tabs",
     "notifications",
     "windows",
-    "identity"
+    "identity",
+    "cookies"
   ],
 
   "web_accessible_resources": [
     {
-      "resources": ["monitor/monitor.html", "onboarding/onboarding.html"],
+      "resources": ["monitor/monitor.html", "onboarding/onboarding.html", "icons/icon48.png"],
       "matches":   ["<all_urls>"]
     }
   ],

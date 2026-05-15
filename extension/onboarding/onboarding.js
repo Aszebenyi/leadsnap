@@ -10,7 +10,7 @@ import {
 } from '../utils/api.js';
 
 const MAX_GROUPS  = 25;
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 // ── Utilities (defined early so everything below can use them) ────────────────
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -592,8 +592,8 @@ document.querySelectorAll('.alert-channel-btn').forEach((btn) => {
 });
 
 document.getElementById('btn-step6-back').addEventListener('click', () => goTo(5));
-document.getElementById('btn-start-monitoring').addEventListener('click', finishOnboarding);
-document.getElementById('skip-6').addEventListener('click', finishOnboarding);
+document.getElementById('btn-start-monitoring').addEventListener('click', () => goTo(7));
+document.getElementById('skip-6').addEventListener('click', () => goTo(7));
 
 async function finishOnboarding() {
   // Show loading state
@@ -653,17 +653,14 @@ async function finishOnboarding() {
       }
     }
 
-    // ── 4. Trigger silent first scan ──────────────────────────────────────────
-    try { chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' }); } catch { /* ignore */ }
-
-    // ── 5. Done ───────────────────────────────────────────────────────────────
-    window.close();
+    // Done — caller handles navigation (step 7 or window.close)
 
   } catch (err) {
     finishLoading.classList.remove('visible');
     step6ActionRow.style.display = 'flex';
     if (skipBtn) skipBtn.style.display = '';
     alert('Failed to save settings: ' + err.message);
+    throw err; // re-throw so callers can detect failure
   }
 }
 
@@ -802,3 +799,122 @@ function shortUrl(url) {
   try { return new URL(url).pathname.replace(/\/$/, ''); }
   catch { return url; }
 }
+
+// ── Step 7: First Scan ────────────────────────────────────────────────────────
+
+let onbScanHours       = 72; // default: 3 days
+let onbScanPollTimer   = null;
+let onbFinishPromise   = null; // tracks finishOnboarding() result
+
+// Time pill selection
+document.querySelectorAll('.scan-time-pill').forEach((pill) => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.scan-time-pill').forEach((p) => p.classList.remove('active'));
+    pill.classList.add('active');
+    onbScanHours = Number(pill.dataset.hours);
+  });
+});
+
+// "Scan Now" button in step 7
+document.getElementById('btn-scan-now-onboarding').addEventListener('click', async () => {
+  document.getElementById('scan-choice-card').style.display    = 'none';
+  document.getElementById('btn-skip-scan').style.display       = 'none';
+  document.getElementById('onboarding-scan-progress').style.display = 'block';
+  document.getElementById('onb-progress-label').textContent    = 'Saving settings…';
+
+  try {
+    // Save all data first (finishOnboarding shows its own loader in step 6;
+    // here we've already moved to step 7 so we call it silently)
+    await finishOnboarding();
+  } catch {
+    // finishOnboarding already showed an alert; restore choice view
+    document.getElementById('scan-choice-card').style.display    = 'block';
+    document.getElementById('btn-skip-scan').style.display       = '';
+    document.getElementById('onboarding-scan-progress').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('onb-progress-label').textContent = 'Starting scan…';
+
+  // Trigger manual scan
+  try {
+    chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN', maxAgeHours: onbScanHours });
+  } catch { /* SW not ready — scan will still pick up on alarm */ }
+
+  // Poll scan_state every 800ms
+  onbScanPollTimer = setInterval(checkOnboardingScanState, 800);
+});
+
+async function checkOnboardingScanState() {
+  let state;
+  try {
+    state = await new Promise((resolve) =>
+      chrome.storage.local.get('scan_state', (d) => resolve(d.scan_state ?? { status: 'idle' }))
+    );
+  } catch { return; }
+
+  const progressEl = document.getElementById('onb-progress-fill');
+  const labelEl    = document.getElementById('onb-progress-label');
+  if (!progressEl || !labelEl) return;
+
+  if (state.status === 'scanning') {
+    const prog = state.progress;
+    const pct  = prog && prog.total > 0 ? Math.round((prog.current / prog.total) * 100) : 5;
+    progressEl.style.width    = `${pct}%`;
+    labelEl.textContent       = prog
+      ? `Scanning group ${prog.current} of ${prog.total}…`
+      : 'Scanning…';
+    return;
+  }
+
+  if (state.status === 'opening-facebook') {
+    progressEl.style.width = '5%';
+    labelEl.textContent    = 'Opening Facebook…';
+    return;
+  }
+
+  // Terminal states
+  clearInterval(onbScanPollTimer);
+  onbScanPollTimer = null;
+  progressEl.style.width = '100%';
+
+  document.getElementById('onboarding-scan-progress').style.display = 'none';
+  document.getElementById('onboarding-scan-complete').style.display = 'block';
+
+  const completeMsg = document.getElementById('onb-complete-msg');
+  if (state.status === 'complete' && state.result) {
+    const r = state.result;
+    completeMsg.textContent = `Scan complete! ${r.found ?? 0} lead${(r.found ?? 0) !== 1 ? 's' : ''} found across ${r.groups_scanned ?? 0} group${(r.groups_scanned ?? 0) !== 1 ? 's' : ''} (${r.posts_checked ?? 0} posts checked).`;
+  } else if (state.status === 'blocked') {
+    completeMsg.textContent = state.blocked_message || 'Scan could not start. Check your settings.';
+  } else {
+    completeMsg.textContent = 'Monitoring is now active!';
+  }
+}
+
+// "Skip scan" button
+document.getElementById('btn-skip-scan').addEventListener('click', async () => {
+  try { await finishOnboarding(); } catch { return; }
+  window.close();
+});
+
+// "Open Dashboard" button
+document.getElementById('btn-onb-view-dashboard').addEventListener('click', async () => {
+  const token = await getAuthToken();
+  const refreshToken = await new Promise((r) =>
+    chrome.storage.local.get('refresh_token', (d) => r(d.refresh_token ?? null))
+  );
+  const DASHBOARD_URL = 'https://leadsnap-weld.vercel.app';
+  if (token && refreshToken) {
+    const hash = `#access_token=${token}&refresh_token=${encodeURIComponent(refreshToken)}&token_type=bearer`;
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/auth/callback${hash}` });
+  } else {
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
+  }
+  window.close();
+});
+
+// "Close" button
+document.getElementById('btn-onb-done').addEventListener('click', () => {
+  window.close();
+});

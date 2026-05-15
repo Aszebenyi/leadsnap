@@ -655,3 +655,77 @@ body {
 .finish-loading.visible {
   display: block;
 }
+
+/* ── Step 7: first-scan choice ── */
+.scan-choice-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.scan-choice-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 10px;
+}
+.scan-time-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.scan-time-pill {
+  padding: 5px 14px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.scan-time-pill.active {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #ea6c0b;
+}
+.scan-time-pill:not(.active):hover {
+  border-color: #f97316;
+  color: #f97316;
+}
+
+/* ── Step 7: scan progress ── */
+.onb-progress-wrap {
+  margin-bottom: 12px;
+}
+.onb-progress-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.onb-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f97316, #ea6c0b);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.onb-progress-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ── Step 7: scan complete message ── */
+.onb-complete-msg {
+  font-size: 14px;
+  font-weight: 600;
+  color: #16a34a;
+  text-align: center;
+  padding: 12px 0 4px;
+  line-height: 1.5;
+}

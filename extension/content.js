@@ -115,23 +115,40 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   const { keywords, groups, silent = false, maxAgeHours = MAX_POST_AGE_HOURS } = message;
 
+  console.log('[LeadSnap] LEADSNAP_SCAN received — URL:', window.location.href);
+  console.log(`[LeadSnap] LEADSNAP_SCAN — keywords: [${(keywords || []).join(', ')}], maxAgeHours: ${maxAgeHours}, groups: ${(groups || []).length}`);
+
   // Only scan if we're on a Facebook group page
-  if (!isFacebookGroupPage()) {
-    sendResponse({ status: 'skipped', reason: 'not a group page', found: 0 });
+  const isGroupPage = isFacebookGroupPage();
+  console.log(`[LeadSnap] isFacebookGroupPage() → ${isGroupPage} (href: ${window.location.href})`);
+  if (!isGroupPage) {
+    sendResponse({ status: 'skipped', reason: 'not a group page', found: 0, posts_checked: 0 });
     return;
   }
 
   // Check if this group URL is in the user's monitored groups
+  const currentPath = normalizeGroupUrl(window.location.href);
+  console.log(`[LeadSnap] isMonitoredGroup check — currentPath: ${currentPath}`);
+  if (groups && groups.length) {
+    groups.forEach((g) => {
+      const url  = typeof g === 'string' ? g : (g.url || g.facebook_group_url);
+      const path = normalizeGroupUrl(url);
+      console.log(`[LeadSnap]   comparing normalised paths: "${path}" === "${currentPath}" → ${path === currentPath}`);
+    });
+  } else {
+    console.log('[LeadSnap]   no groups passed — will be treated as not monitored');
+  }
   if (!isMonitoredGroup(groups)) {
-    sendResponse({ status: 'skipped', reason: 'group not monitored', found: 0 });
+    console.log('[LeadSnap] Group not in monitored list — skipping');
+    sendResponse({ status: 'skipped', reason: 'group not monitored', found: 0, posts_checked: 0 });
     return;
   }
 
   scrollThenScrape(keywords, groups, silent, maxAgeHours)
-    .then((found) => sendResponse({ status: 'ok', found }))
+    .then(({ found, posts_checked }) => sendResponse({ status: 'ok', found, posts_checked }))
     .catch((err) => {
       console.error('[LeadSnap] Scrape error:', err);
-      sendResponse({ status: 'error', error: err.message, found: 0 });
+      sendResponse({ status: 'error', error: err.message, found: 0, posts_checked: 0 });
     });
 
   return true; // keep message channel open for async response
@@ -184,7 +201,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       console.log('[LeadSnap] Passive scan running on', window.location.href);
       try {
-        const found = await scrapeAndSubmit(passiveKeywords, passiveGroups, false, passiveMaxAge);
+        const { found } = await scrapeAndSubmit(passiveKeywords, passiveGroups, false, passiveMaxAge);
         console.log(`[LeadSnap] Passive scan complete — ${found} new lead(s) submitted`);
       } catch (err) {
         console.warn('[LeadSnap] Passive scan error:', err.message);
@@ -522,22 +539,29 @@ async function scrapeAndSubmit(keywords, groups, silent = false, maxAgeHours = M
   let submitted = 0;
 
   for (const post of posts) {
-    if (seenIds.includes(post.id)) {
-      console.log(`[LeadSnap] Skipping already-seen post: "${post.text.slice(0, 50)}"`);
+    const ageLabel = post.ageHours !== null ? `${post.ageHours.toFixed(1)}h old` : 'age unknown';
+    const alreadySeen = seenIds.includes(post.id);
+    const matched = alreadySeen ? [] : matchKeywords(post.text, keywords);
+
+    console.log(
+      `[LeadSnap] Post id=${post.id} | ${ageLabel} | seen=${alreadySeen} | keywords matched=${matched.length > 0 ? matched.join(', ') : 'none'} | preview: "${post.text.slice(0, 60)}"`
+    );
+
+    if (alreadySeen) {
+      console.log(`[LeadSnap]   → Skipping (already seen)`);
       continue;
     }
 
-    const matched = matchKeywords(post.text, keywords);
     if (!matched.length) {
-      console.log(`[LeadSnap] No keyword match: "${post.text.slice(0, 60)}"`);
+      console.log(`[LeadSnap]   → Skipping (no keyword match)`);
       continue;
     }
 
     const groupName = getGroupName(groups);
     const groupUrl  = window.location.href.split('?')[0];
 
-    console.log(`[LeadSnap] Match found — keywords: ${matched.join(', ')}`);
-    console.log(`[LeadSnap] Post preview: ${post.text.slice(0, 80)}…`);
+    console.log(`[LeadSnap]   → Submitting lead — group: "${groupName}", keywords: [${matched.join(', ')}]`);
+    console.log(`[LeadSnap]   → Full preview: "${post.text.slice(0, 120)}"`);
 
     // Send to background worker and wait for confirmation before marking seen.
     // This prevents losing leads if the ingest API call fails.
@@ -560,15 +584,17 @@ async function scrapeAndSubmit(keywords, groups, silent = false, maxAgeHours = M
     });
 
     if (response.error) {
-      console.warn(`[LeadSnap] Ingest failed for post ${post.id} — will retry next scan:`, response.error);
+      console.warn(`[LeadSnap]   → Ingest failed for post ${post.id} — will retry next scan:`, response.error);
       // Do NOT mark seen — the post will be retried on the next scan cycle
     } else {
       await markPostSeen(post.id);
       submitted++;
+      console.log(`[LeadSnap]   → Lead submitted and marked seen (total this scan: ${submitted})`);
     }
   }
 
-  return submitted;
+  console.log(`[LeadSnap] scrapeAndSubmit summary — ${allPosts.length} articles on page, ${posts.length} within ${maxAgeHours}h window, ${submitted} lead(s) submitted`);
+  return { found: submitted, posts_checked: allPosts.length };
 }
 
 // ── DOM scraping ──────────────────────────────────────────────────────────────
@@ -577,20 +603,24 @@ function scrapePosts() {
   // role="article" is the most stable selector for Facebook posts.
   // It wraps both feed posts and group posts across FB's A/B tests.
   const articles = document.querySelectorAll('[role="article"]');
+  console.log(`[LeadSnap] scrapePosts — found ${articles.length} [role="article"] element(s) in DOM`);
   const posts = [];
 
-  articles.forEach((article) => {
+  articles.forEach((article, idx) => {
     try {
       const post = extractPost(article);
       if (post && post.text && post.text.length > MIN_POST_TEXT_LENGTH) {
         posts.push(post);
+      } else if (post && (!post.text || post.text.length <= MIN_POST_TEXT_LENGTH)) {
+        console.log(`[LeadSnap] Article #${idx} — text too short or empty (${post.text?.length ?? 0} chars), skipping`);
       }
     } catch (err) {
       // Individual post failures shouldn't abort the whole scrape
-      console.warn('[LeadSnap] Failed to extract post:', err.message);
+      console.warn(`[LeadSnap] Failed to extract article #${idx}:`, err.message);
     }
   });
 
+  console.log(`[LeadSnap] scrapePosts — ${posts.length} valid post(s) extracted from ${articles.length} article(s)`);
   return posts;
 }
 
@@ -618,7 +648,10 @@ function extractPost(article) {
 function extractText(article) {
   // Strategy 1: data-ad-preview="message" (sponsored + organic posts)
   const adPreview = article.querySelector('[data-ad-preview="message"]');
-  if (adPreview) return adPreview.innerText.trim();
+  if (adPreview) {
+    console.log('[LeadSnap] extractText — strategy 1 (data-ad-preview) succeeded');
+    return adPreview.innerText.trim();
+  }
 
   // Strategy 2: the first substantive dir="auto" block that isn't a name/header
   // Facebook uses dir="auto" for user-generated text content
@@ -626,6 +659,7 @@ function extractText(article) {
   for (const el of dirAutos) {
     // Skip tiny elements (likely UI labels) and elements that contain other articles
     if (el.innerText.trim().length > 30 && !el.querySelector('[role="article"]')) {
+      console.log(`[LeadSnap] extractText — strategy 2 (div[dir="auto"]) succeeded, ${dirAutos.length} candidate(s) found`);
       return el.innerText.trim();
     }
   }
@@ -633,8 +667,12 @@ function extractText(article) {
   // Strategy 3: look for a block with substantial text inside a post body
   // data-testid="post_message" appears in some FB versions
   const postMsg = article.querySelector('[data-testid="post_message"]');
-  if (postMsg) return postMsg.innerText.trim();
+  if (postMsg) {
+    console.log('[LeadSnap] extractText — strategy 3 (data-testid="post_message") succeeded');
+    return postMsg.innerText.trim();
+  }
 
+  console.log('[LeadSnap] extractText — all 3 strategies failed for this article');
   return null;
 }
 

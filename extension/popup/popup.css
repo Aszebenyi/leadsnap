@@ -417,3 +417,90 @@ body {
 }
 .btn-ghost-border:hover { background: var(--surface); opacity: 1; border-color: #d1d5db; }
 .btn-full { width: 100%; }
+
+/* ── Status dot pulse (active state) ── */
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
+  50%       { box-shadow: 0 0 0 5px rgba(22,163,74,.25); }
+}
+.status-dot.active { animation: pulse-green 2s ease-in-out infinite; }
+
+/* ── Scan progress card ── */
+.scan-progress-card {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px 14px;
+}
+
+/* ── Scan spinner (small inline arc) ── */
+.scan-spinner {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border: 2.5px solid var(--rule);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+}
+
+/* ── Scan progress bar ── */
+.scan-progress-bar-wrap {
+  width: 100%; height: 4px;
+  background: var(--rule); border-radius: 99px; overflow: hidden;
+}
+.scan-progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.35s ease;
+}
+
+/* ── Cancel scan button ── */
+.btn-cancel-scan {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--ink-4);
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-cancel-scan:hover { border-color: var(--red); color: var(--red); }
+
+/* ── Scan complete card ── */
+.scan-complete-card {
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  background: var(--green-bg);
+  padding: 12px 14px;
+}
+
+/* ── Scan blocked card ── */
+.scan-blocked-card {
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: var(--amber-bg);
+  padding: 12px 14px;
+}
+
+/* ── "Run manual scan" link button ── */
+.btn-link-scan {
+  background: none; border: none; padding: 0;
+  font-size: 12px; font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color .15s;
+  white-space: nowrap;
+}
+.btn-link-scan:hover { color: var(--accent-deep); }
+
+/* ── Small group/keyword count line ── */
+.stat-kw-group {
+  font-size: 11px;
+  color: var(--ink-4);
+  text-align: center;
+}

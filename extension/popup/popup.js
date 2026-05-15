@@ -10,8 +10,11 @@ import {
   isOnboardingComplete,
   getRefreshToken,
   setSession,
-  getScanMaxAgeHours,
-  setScanMaxAgeHours,
+  getManualScanAgeHours,
+  setManualScanAgeHours,
+  getScanState,
+  setScanState,
+  getLeadsFoundToday,
 } from '../utils/storage.js';
 import { signIn, signUp } from '../utils/supabase-auth.js';
 
@@ -29,10 +32,6 @@ const statusDot      = document.getElementById('status-dot');
 const statusTitle    = document.getElementById('status-title');
 const statusSub      = document.getElementById('status-sub');
 const toggleScanning = document.getElementById('toggle-scanning');
-const scanNowBtn     = document.getElementById('btn-scan-now');
-const statKeywords   = document.getElementById('stat-keywords');
-const statGroups     = document.getElementById('stat-groups');
-const statLastScan   = document.getElementById('stat-last-scan');
 const leadsList      = document.getElementById('leads-list');
 
 // ── Auth state ────────────────────────────────────────────────────────────────
@@ -45,6 +44,7 @@ let token          = null;
 let keywordsCount  = 0;
 let groupsCount    = 0;
 let leadsLoaded    = false; // load once on first tab switch
+let countdownInterval = null;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,18 @@ async function init() {
 
   // Load status tab data (default tab)
   await loadStatus();
+
+  // Start listening for scan state changes
+  startScanStateListener();
+
+  // Read initial scan state; guard against stale 'scanning' (SW may have died)
+  const initialState = await getScanState();
+  if (initialState.status === 'scanning' && Date.now() - initialState.started_at > 5 * 60 * 1000) {
+    await setScanState({ status: 'idle' });
+    renderIdleState();
+  } else {
+    renderScanState(initialState);
+  }
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -105,10 +117,9 @@ document.querySelectorAll('.tab').forEach((btn) => {
 // ── Status tab ────────────────────────────────────────────────────────────────
 
 async function loadStatus() {
-  const [scanningEnabled, lastScanAt, { status: subStatus }, savedGroups, cachedKeywords] =
+  const [scanningEnabled, { status: subStatus }, savedGroups, cachedKeywords] =
     await Promise.all([
       new Promise((r) => chrome.storage.sync.get('scanning_enabled', (d) => r(d.scanning_enabled !== false))),
-      getLastScanAt(),
       getSubscriptionStatus(),
       getSelectedGroups(),
       new Promise((r) => chrome.storage.sync.get('keywords', (d) => r(d.keywords || []))),
@@ -117,29 +128,20 @@ async function loadStatus() {
   keywordsCount = cachedKeywords.length;
   groupsCount   = savedGroups.length;
 
-  toggleScanning.checked     = scanningEnabled;
-  statKeywords.textContent   = keywordsCount || '0';
-  statGroups.textContent     = groupsCount   || '0';
-  statLastScan.textContent   = formatLastScan(lastScanAt);
+  toggleScanning.checked = scanningEnabled;
 
   if (subStatus === 'inactive') {
     setStatusCard('error', 'Subscription expired', 'Scanning paused');
     subBanner.classList.remove('hidden');
-    scanNowBtn.disabled = true;
-    scanNowBtn.title    = 'Active subscription required to scan';
   } else if (!scanningEnabled) {
     setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
-    scanNowBtn.disabled = true;
-    scanNowBtn.title    = 'Enable monitoring to scan';
   } else {
     setStatusCard('active', 'Monitoring active', 'Scanning every 10 minutes');
-    scanNowBtn.disabled = false;
-    scanNowBtn.title    = '';
   }
 }
 
 function setStatusCard(state, title, sub) {
-  statusDot.className  = `status-dot ${state}`;
+  statusDot.className     = `status-dot ${state}`;
   statusTitle.textContent = title;
   statusSub.textContent   = sub;
 }
@@ -152,6 +154,172 @@ function formatLastScan(ts) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24)  return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ── Scan state ────────────────────────────────────────────────────────────────
+
+function startScanStateListener() {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.scan_state) {
+      renderScanState(changes.scan_state.newValue);
+    }
+  });
+}
+
+function renderScanState(state) {
+  if (!state) { renderIdleState(); return; }
+
+  switch (state.status) {
+    case 'idle':
+      renderIdleState();
+      break;
+
+    case 'opening-facebook':
+      renderScanStatusRoot(`
+        <div class="scan-progress-card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="scan-spinner"></div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink)">Opening Facebook…</div>
+              <div style="font-size:11px;color:var(--ink-4);margin-top:2px">Loading your group, one moment</div>
+            </div>
+          </div>
+        </div>
+      `);
+      break;
+
+    case 'scanning': {
+      const prog  = state.progress;
+      const pct   = prog && prog.total > 0 ? Math.round((prog.current / prog.total) * 100) : 0;
+      const label = prog ? `Group ${prog.current} of ${prog.total}` : 'Starting…';
+      const name  = prog?.group_name ? escHtml(prog.group_name) : '';
+      renderScanStatusRoot(`
+        <div class="scan-progress-card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div class="scan-spinner"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--ink)">Scanning…</div>
+              <div style="font-size:11px;color:var(--ink-4);margin-top:1px">${label}</div>
+            </div>
+            <button class="btn-cancel-scan" id="btn-cancel-scan-inline">Cancel</button>
+          </div>
+          <div class="scan-progress-bar-wrap">
+            <div class="scan-progress-bar-fill" style="width:${pct}%"></div>
+          </div>
+          ${name ? `<div class="stat-kw-group" style="margin-top:6px">${name}</div>` : ''}
+        </div>
+      `);
+      document.getElementById('btn-cancel-scan-inline')?.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'SCAN_CANCEL' });
+      });
+      break;
+    }
+
+    case 'complete': {
+      if (state.completed_at && Date.now() - state.completed_at > 8000) {
+        renderIdleState();
+        return;
+      }
+      const r = state.result || {};
+      const found    = r.found ?? 0;
+      const scanned  = r.groups_scanned ?? 0;
+      const checked  = r.posts_checked ?? 0;
+      renderScanStatusRoot(`
+        <div class="scan-complete-card" style="margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">
+            ✓ Scan complete
+          </div>
+          <div style="font-size:12px;color:var(--ink-3)">
+            ${found} lead${found !== 1 ? 's' : ''} found · ${checked} posts checked · ${scanned} group${scanned !== 1 ? 's' : ''}
+          </div>
+        </div>
+      `);
+      setTimeout(() => renderIdleState(), 8000);
+      break;
+    }
+
+    case 'blocked': {
+      const msg = escHtml(state.blocked_message || 'Scan could not start.');
+      const isFbLogin = state.blocked_reason === 'not-logged-into-facebook';
+      renderScanStatusRoot(`
+        <div class="scan-blocked-card" style="margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:4px">
+            ⚠ Scan blocked
+          </div>
+          <div style="font-size:12px;color:var(--ink-3);margin-bottom:8px">${msg}</div>
+          ${isFbLogin
+            ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" id="btn-open-fb">Open Facebook</button>`
+            : `<button class="btn-cancel-scan" id="btn-dismiss-blocked">Dismiss</button>`
+          }
+        </div>
+      `);
+      document.getElementById('btn-open-fb')?.addEventListener('click', () => {
+        chrome.tabs.create({ url: 'https://www.facebook.com' });
+      });
+      document.getElementById('btn-dismiss-blocked')?.addEventListener('click', async () => {
+        await setScanState({ status: 'idle' });
+        renderIdleState();
+      });
+      break;
+    }
+
+    default:
+      renderIdleState();
+  }
+}
+
+function renderScanStatusRoot(html) {
+  const root = document.getElementById('scan-status-root');
+  if (root) root.innerHTML = html;
+}
+
+async function renderIdleState() {
+  const [lastScanAt, leadsToday] = await Promise.all([
+    getLastScanAt(),
+    getLeadsFoundToday(),
+  ]);
+
+  const todayStr   = new Date().toISOString().slice(0, 10);
+  const leadsCount = leadsToday?.date === todayStr ? (leadsToday.count ?? 0) : 0;
+
+  renderScanStatusRoot(`
+    <div class="stat-row" style="margin-bottom:12px">
+      <div class="stat">
+        <div class="stat-value">${escHtml(formatLastScan(lastScanAt))}</div>
+        <div class="stat-label">Last scan</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat">
+        <div class="stat-value" id="stat-next-scan">—</div>
+        <div class="stat-label">Next scan</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat">
+        <div class="stat-value">${leadsCount}</div>
+        <div class="stat-label">Leads today</div>
+      </div>
+    </div>
+    <div class="stat-kw-group" style="margin-bottom:12px">
+      Groups: ${groupsCount} · Keywords: ${keywordsCount}
+    </div>
+  `);
+
+  startNextScanCountdown();
+}
+
+function startNextScanCountdown() {
+  clearInterval(countdownInterval);
+  function update() {
+    const el = document.getElementById('stat-next-scan');
+    if (!el) { clearInterval(countdownInterval); return; }
+    chrome.alarms.get('leadsnap-scan', (alarm) => {
+      if (!alarm) { el.textContent = '—'; return; }
+      const ms = alarm.scheduledTime - Date.now();
+      el.textContent = ms <= 0 ? 'soon' : `in ${Math.ceil(ms / 60000)}m`;
+    });
+  }
+  update();
+  countdownInterval = setInterval(update, 15000);
 }
 
 // ── Leads tab ─────────────────────────────────────────────────────────────────
@@ -246,10 +414,15 @@ function relativeTime(iso) {
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
-const SCAN_AGE_LABELS = { 24: 'Last 24 hours', 168: 'Last 7 days', 720: 'Last 30 days' };
+const MANUAL_SCAN_AGE_LABELS = {
+  0.5: 'Last 30 minutes',
+  2:   'Last 2 hours',
+  24:  'Last 24 hours',
+  168: 'Last 7 days',
+};
 
 async function loadSettings() {
-  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite, alertChannel, scanMaxAgeHours] =
+  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite, alertChannel, manualScanAgeHours] =
     await Promise.all([
       new Promise((r) => chrome.storage.sync.get('selected_groups', (d) => r(d.selected_groups || []))),
       new Promise((r) => chrome.storage.sync.get('keywords',        (d) => r(d.keywords        || []))),
@@ -257,7 +430,7 @@ async function loadSettings() {
       new Promise((r) => chrome.storage.sync.get('website_url',     (d) => r(d.website_url     || ''))),
       new Promise((r) => chrome.storage.sync.get('include_website_in_replies', (d) => r(!!d.include_website_in_replies))),
       new Promise((r) => chrome.storage.sync.get('alert_channel',  (d) => r(d.alert_channel   || 'sms'))),
-      getScanMaxAgeHours(),
+      getManualScanAgeHours(),
     ]);
 
   document.getElementById('setting-keywords-val').textContent =
@@ -283,9 +456,9 @@ async function loadSettings() {
 
   // Scan window pills
   const ageVal = document.getElementById('setting-scan-age-val');
-  ageVal.textContent = SCAN_AGE_LABELS[scanMaxAgeHours] ?? 'Last 24 hours';
+  ageVal.textContent = MANUAL_SCAN_AGE_LABELS[manualScanAgeHours] ?? 'Last 2 hours';
   document.querySelectorAll('.channel-pill[data-age]').forEach((pill) => {
-    pill.classList.toggle('active', Number(pill.dataset.age) === scanMaxAgeHours);
+    pill.classList.toggle('active', Number(pill.dataset.age) === manualScanAgeHours);
   });
 }
 
@@ -294,11 +467,22 @@ document.getElementById('scan-age-toggle-row').addEventListener('click', async (
   const pill = e.target.closest('.channel-pill[data-age]');
   if (!pill) return;
   const hours = Number(pill.dataset.age);
-  await setScanMaxAgeHours(hours);
-  document.getElementById('setting-scan-age-val').textContent = SCAN_AGE_LABELS[hours];
+  await setManualScanAgeHours(hours);
+  document.getElementById('setting-scan-age-val').textContent = MANUAL_SCAN_AGE_LABELS[hours] ?? 'Last 2 hours';
   document.querySelectorAll('.channel-pill[data-age]').forEach((p) => {
     p.classList.toggle('active', p === pill);
   });
+});
+
+// Run manual scan link
+document.getElementById('btn-run-manual-scan').addEventListener('click', async () => {
+  const hours = await getManualScanAgeHours();
+  chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN', maxAgeHours: hours });
+  // Switch to Status tab
+  document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+  document.querySelector('.tab[data-tab="status"]').classList.add('active');
+  document.getElementById('tab-status').classList.remove('hidden');
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -447,11 +631,6 @@ document.getElementById('btn-upgrade').addEventListener('click', () =>
   openDashboardTab('/billing')
 );
 
-document.getElementById('btn-scan-now').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' });
-  window.close(); // monitor window takes over
-});
-
 document.getElementById('btn-view-leads').addEventListener('click', () =>
   openDashboardTab('/dashboard')
 );
@@ -484,14 +663,16 @@ document.getElementById('btn-edit-phone').addEventListener('click', () =>
 document.querySelectorAll('.channel-pill').forEach((pill) => {
   pill.addEventListener('click', () => {
     const ch = pill.dataset.channel;
+    if (!ch) return; // age pills handled separately
     chrome.storage.sync.set({ alert_channel: ch });
-    document.querySelectorAll('.channel-pill').forEach((p) =>
+    document.querySelectorAll('.channel-pill[data-channel]').forEach((p) =>
       p.classList.toggle('active', p.dataset.channel === ch)
     );
     document.getElementById('setting-channel-val').textContent =
       ch === 'whatsapp' ? 'WhatsApp' : 'SMS';
   });
 });
+
 document.getElementById('btn-edit-website').addEventListener('click', () =>
   openDashboardTab('/settings')
 );
@@ -500,12 +681,8 @@ toggleScanning.addEventListener('change', (e) => {
   setScanningEnabled(e.target.checked);
   if (e.target.checked) {
     setStatusCard('active', 'Monitoring active', 'Scanning every 10 minutes');
-    scanNowBtn.disabled = false;
-    scanNowBtn.title    = '';
   } else {
     setStatusCard('inactive', 'Monitoring paused', 'Toggle to resume');
-    scanNowBtn.disabled = true;
-    scanNowBtn.title    = 'Enable monitoring to scan';
   }
 });
 
