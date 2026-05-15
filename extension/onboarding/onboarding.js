@@ -254,24 +254,16 @@ async function reloadGroups() {
   setGroupsMsg('');
   showGroupsProgress(true, 'Loading your groups…');
 
-  let winId = null;
   let tabId = null;
   try {
-    // Open Facebook in a tiny off-screen popup window.
-    // focused:false means it won't steal keyboard focus or jump the user away.
-    // left is pushed past the right edge of the screen so it's never visible.
-    const screenWidth = window.screen?.availWidth ?? 1920;
-    const win = await chrome.windows.create({
-      url:     'https://www.facebook.com/groups/joins',
-      type:    'popup',
-      focused: false,
-      width:   1024,
-      height:  768,
-      left:    screenWidth + 100,
-      top:     0,
+    // Open Facebook in a background tab (active:false — never steals focus).
+    // Using tabs.create() instead of windows.create() avoids Chrome's
+    // "bounds must be 50% within visible screen" restriction.
+    const tab = await chrome.tabs.create({
+      url:    'https://www.facebook.com/groups/joins',
+      active: false,
     });
-    winId = win.id;
-    tabId = win.tabs[0].id;
+    tabId = tab.id;
 
     showGroupsProgress(true, 'Waiting for Facebook to load…');
     await waitForTabComplete(tabId, 15000);
@@ -291,8 +283,7 @@ async function reloadGroups() {
       } catch { /* still not ready */ }
     }
 
-    chrome.windows.remove(winId).catch(() => {});
-    winId = null;
+    chrome.tabs.remove(tabId).catch(() => {});
     tabId = null;
 
     showGroupsProgress(false);
@@ -314,8 +305,7 @@ async function reloadGroups() {
     showGroupsProgress(false);
     setGroupsMsg('Could not load groups: ' + err.message, true);
   } finally {
-    if (winId) chrome.windows.remove(winId).catch(() => {});
-    else if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+    if (tabId) chrome.tabs.remove(tabId).catch(() => {});
     btnReloadGroups.disabled    = false;
     btnReloadGroups.textContent = 'Load my groups';
   }
