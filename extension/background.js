@@ -333,7 +333,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ── Google sign-in (proxied here so the flow survives the popup closing) ──────
 
 async function handleGoogleSignIn() {
-  const session = await signInWithGoogle(GOOGLE_CLIENT_ID);
+  // Log the redirect URI so it's easy to copy from the service worker console
+  // and register in Google Cloud Console → Authorized redirect URIs
+  console.log('[LeadSnap] Google redirect URI:', chrome.identity.getRedirectURL());
+
+  let session;
+  try {
+    session = await signInWithGoogle(GOOGLE_CLIENT_ID);
+  } catch (err) {
+    console.error('[LeadSnap] Google sign-in failed:', err.message);
+    chrome.notifications.create('leadsnap-signin-failed', {
+      type:    'basic',
+      iconUrl: 'icons/icon48.png',
+      title:   'LeadSnap — Sign-in failed',
+      message: err.message || 'Google sign-in failed. Please try again.',
+    });
+    throw err; // re-throw so the message handler can also report it
+  }
 
   // Persist the Supabase session via the canonical storage abstraction
   await setSession({
