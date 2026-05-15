@@ -21,24 +21,46 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg.type === 'SCAN_COMPLETE') {
-    // Show a brief "done" state before closing
-    spinner.style.display      = 'none';
-    doneIcon.style.display     = 'block';
-    titleEl.textContent        = 'Scan Complete';
-    subtitleEl.textContent     = `${msg.found ?? 0} new lead${(msg.found ?? 0) !== 1 ? 's' : ''} found.`;
-    progressFill.style.width   = '100%';
-    progressLabel.textContent  = 'Done';
-    groupNameEl.textContent    = '';
-    btnCancel.disabled         = true;
-    setTimeout(() => window.close(), 1800);
+    const found   = msg.found ?? 0;
+    const skipped = msg.skippedNotMonitored ?? 0;
+
+    spinner.style.display    = 'none';
+    doneIcon.style.display   = 'block';
+    titleEl.textContent      = 'Scan Complete';
+    progressFill.style.width = '100%';
+    progressLabel.textContent = 'Done';
+    groupNameEl.textContent  = '';
+    btnCancel.disabled       = true;
+
+    if (found > 0) {
+      subtitleEl.textContent = `${found} new lead${found !== 1 ? 's' : ''} found!`;
+    } else if (skipped > 0) {
+      subtitleEl.textContent = `0 leads found. ${skipped} open tab${skipped !== 1 ? 's were' : ' was'} not in your monitored groups list — add them in Settings.`;
+    } else {
+      subtitleEl.textContent = '0 new leads — no posts matched your keywords this time.';
+    }
+
+    setTimeout(() => window.close(), skipped > 0 ? 4000 : 1800);
   }
 
   if (msg.type === 'SCAN_NO_TABS') {
-    spinner.style.display  = 'none';
-    titleEl.textContent    = 'No Facebook Tabs Found';
-    subtitleEl.textContent = 'Open facebook.com in Chrome and try again.';
+    spinner.style.display     = 'none';
+    titleEl.textContent       = 'No Facebook Group Tabs Open';
+    subtitleEl.textContent    = 'Open one of your monitored Facebook groups in Chrome, then scan again. LeadSnap only scans tabs you already have open — it never opens new ones.';
+    progressFill.style.width  = '0%';
     progressLabel.textContent = '';
-    groupNameEl.textContent = '';
+    groupNameEl.textContent   = '';
+    // Don't auto-close — user needs to read this
+  }
+
+  if (msg.type === 'SCAN_BLOCKED') {
+    spinner.style.display     = 'none';
+    titleEl.textContent       = 'Scan Blocked';
+    subtitleEl.textContent    = msg.message || 'Cannot scan right now.';
+    progressFill.style.width  = '0%';
+    progressLabel.textContent = '';
+    groupNameEl.textContent   = '';
+    // Don't auto-close — user needs to read this
   }
 });
 

@@ -71,14 +71,14 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   const token = await getAuthToken();
   if (!token) {
     console.log('[LeadSnap] No auth token — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
+    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'not-signed-in', message: 'You\'re not signed in. Please sign in and try again.' });
     return;
   }
 
   const enabled = await getScanningEnabled();
   if (!enabled) {
     console.log('[LeadSnap] Scanning disabled — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
+    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'scanning-disabled', message: 'Scanning is turned off. Enable it in Settings.' });
     return;
   }
 
@@ -90,19 +90,19 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   }
   if (!isSubscriptionAllowed(status)) {
     console.log('[LeadSnap] Subscription inactive — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
+    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'subscription-required', message: 'Your trial has ended. Subscribe to continue scanning.' });
     return;
   }
 
   const [groups, keywords, maxAgeHours] = await Promise.all([getSelectedGroups(), getKeywords(), getScanMaxAgeHours()]);
   if (!groups.length) {
     console.log('[LeadSnap] No groups selected — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
+    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'no-groups', message: 'No groups selected. Go to Settings → Groups to add some.' });
     return;
   }
   if (!keywords.length) {
     console.log('[LeadSnap] No keywords configured — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
+    sendToMonitor(monitorTabId, { type: 'SCAN_BLOCKED', reason: 'no-keywords', message: 'No keywords configured. Go to Settings → Keywords to add some.' });
     return;
   }
 
@@ -114,13 +114,18 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
 
   const openGroupTabs = await chrome.tabs.query({ url: 'https://www.facebook.com/groups/*' });
 
+  console.log(`[LeadSnap] Open Facebook group tabs: ${openGroupTabs.length}`, openGroupTabs.map((t) => t.url));
+  console.log(`[LeadSnap] Monitored groups (${groups.length}):`, groups.map((g) => g.url || g.facebook_group_url || g));
+  console.log(`[LeadSnap] Keywords (${keywords.length}):`, keywords.map((k) => (typeof k === 'string' ? k : k.keyword)));
+
   if (!openGroupTabs.length) {
     console.log('[LeadSnap] No Facebook group tabs open — passive observer will catch leads when user visits groups');
-    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
+    sendToMonitor(monitorTabId, { type: 'SCAN_NO_TABS' });
     return;
   }
 
   let totalFound = 0;
+  let skippedNotMonitored = 0;
 
   for (let i = 0; i < openGroupTabs.length; i++) {
     if (manualScanCancelled) break;
@@ -142,7 +147,13 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
         silent,
         maxAgeHours,
       });
-      if (response?.found) totalFound += response.found;
+      if (response?.found) {
+        totalFound += response.found;
+      }
+      if (response?.status === 'skipped') {
+        console.log(`[LeadSnap] Tab ${tab.id} skipped — ${response.reason} (${tab.url})`);
+        if (response.reason === 'group not monitored') skippedNotMonitored++;
+      }
     } catch (err) {
       console.warn(`[LeadSnap] Could not message tab ${tab.id}:`, err.message);
     }
@@ -153,7 +164,7 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
   if (token) heartbeat(token).catch(() => {});
   console.log(`[LeadSnap] Scan cycle complete — ${totalFound} new lead(s) submitted`);
 
-  sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: totalFound });
+  sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: totalFound, skippedNotMonitored });
 }
 
 /** Send a message to the monitor window tab, ignoring any errors */
@@ -180,7 +191,7 @@ async function runManualScan() {
       url:    monitorUrl,
       type:   'popup',
       width:  420,
-      height: 320,
+      height: 360,
       focused: true,
     });
     // The new window has exactly one tab
