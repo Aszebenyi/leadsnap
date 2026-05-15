@@ -3,6 +3,25 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 
+// ── Startup env validation ────────────────────────────────────────────────────
+// Fail fast if required environment variables are missing.
+// Hard failures in production are preferable to silent misbehaviour.
+const REQUIRED_ENV = [
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'ANTHROPIC_API_KEY',
+  'TWILIO_ACCOUNT_SID',
+  'TWILIO_AUTH_TOKEN',
+  'TWILIO_PHONE_NUMBER',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+];
+const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missingEnv.length > 0) {
+  console.error(`[LeadSnap] Missing required environment variable(s): ${missingEnv.join(', ')}`);
+  process.exit(1);
+}
+
 process.on('uncaughtException', (err) => {
   console.error('[CRASH] Uncaught exception:', err);
   process.exit(1);

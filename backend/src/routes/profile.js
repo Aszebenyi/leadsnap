@@ -86,6 +86,15 @@ function isPrivateHost(hostname) {
   if (/^192\.168\./.test(hostname)) return true;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
 
+  // IPv6 link-local (fe80::/10)
+  if (/^fe[89ab][0-9a-f]:/i.test(hostname)) return true;
+
+  // IPv6 unique local (fc00::/7 — fc and fd prefixes)
+  if (/^f[cd]/i.test(hostname)) return true;
+
+  // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) covering private ranges
+  if (/^::ffff:(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(hostname)) return true;
+
   return false;
 }
 

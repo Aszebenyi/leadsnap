@@ -1,5 +1,13 @@
 // LeadSnap onboarding wizard — 6-step flow (ES module)
 import { API_URL, FACEBOOK_APP_ID } from '../utils/config.js';
+import {
+  getKeywords  as apiGetKeywords,
+  addKeyword   as apiAddKeyword,
+  deleteKeyword as apiDeleteKeyword,
+  getGroups    as apiGetGroups,
+  addGroup     as apiAddGroup,
+  deleteGroup  as apiDeleteGroup,
+} from '../utils/api.js';
 
 const MAX_GROUPS  = 25;
 const TOTAL_STEPS = 6;
@@ -11,6 +19,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let currentStep            = 1;
 let allDiscoveredGroups    = []; // [{ url, name }]
 let selectedGroupUrls      = new Set();
+let groupSearchQuery       = ''; // live filter for the Step 2 groups list
 let keywords               = []; // string[]
 let extractedDescription   = ''; // pre-fill for Step 5 from website extraction
 let extractedWebsiteUrl    = ''; // URL entered in Step 4
@@ -35,6 +44,7 @@ const step1ActionRow   = document.getElementById('step1-action-row');
 const groupsCounter    = document.getElementById('groups-counter');
 const groupsMsg        = document.getElementById('groups-msg');
 const groupsList       = document.getElementById('groups-list');
+const groupsSearch     = document.getElementById('groups-search');
 const btnReloadGroups  = document.getElementById('btn-reload-groups');
 
 // Step 3
@@ -233,31 +243,41 @@ document.getElementById('skip-1').addEventListener('click', () => goTo(2));
 
 btnReloadGroups.addEventListener('click', reloadGroups);
 
+groupsSearch.addEventListener('input', (e) => {
+  groupSearchQuery = e.target.value.trim().toLowerCase();
+  renderGroupsList();
+});
+
 async function reloadGroups() {
   btnReloadGroups.disabled    = true;
   btnReloadGroups.textContent = 'Loading…';
   setGroupsMsg('');
-  showGroupsProgress(true, 'Opening your groups page…');
+  showGroupsProgress(true, 'Loading your groups…');
 
-  // Get the onboarding tab ID so we can switch back to it after opening FB
-  const onboardingTab = await new Promise((r) => chrome.tabs.getCurrent(r));
-
+  let winId = null;
   let tabId = null;
   try {
-    // Keep the tab active during the entire scroll so Facebook's
-    // IntersectionObserver fires and lazy-loads all groups. We switch back
-    // to the onboarding tab only after extraction is complete.
-    const tab = await chrome.tabs.create({
-      url:    'https://www.facebook.com/groups/joins/',
-      active: true,
+    // Open Facebook in a tiny off-screen popup window.
+    // focused:false means it won't steal keyboard focus or jump the user away.
+    // left is pushed past the right edge of the screen so it's never visible.
+    const screenWidth = window.screen?.availWidth ?? 1920;
+    const win = await chrome.windows.create({
+      url:     'https://www.facebook.com/groups/joins',
+      type:    'popup',
+      focused: false,
+      width:   1024,
+      height:  768,
+      left:    screenWidth + 100,
+      top:     0,
     });
-    tabId = tab.id;
+    winId = win.id;
+    tabId = win.tabs[0].id;
 
     showGroupsProgress(true, 'Waiting for Facebook to load…');
     await waitForTabComplete(tabId, 15000);
     await sleep(2000);
 
-    showGroupsProgress(true, 'Scrolling through your groups list…');
+    showGroupsProgress(true, 'Scanning your groups list…');
 
     let fetched = [];
     try {
@@ -271,12 +291,8 @@ async function reloadGroups() {
       } catch { /* still not ready */ }
     }
 
-    // Return focus to the onboarding tab now that scraping is done
-    if (onboardingTab?.id) {
-      chrome.tabs.update(onboardingTab.id, { active: true }).catch(() => {});
-    }
-    await sleep(200); // brief pause so focus switch lands before we remove the FB tab
-    chrome.tabs.remove(tabId).catch(() => {});
+    chrome.windows.remove(winId).catch(() => {});
+    winId = null;
     tabId = null;
 
     showGroupsProgress(false);
@@ -298,7 +314,8 @@ async function reloadGroups() {
     showGroupsProgress(false);
     setGroupsMsg('Could not load groups: ' + err.message, true);
   } finally {
-    if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+    if (winId) chrome.windows.remove(winId).catch(() => {});
+    else if (tabId) chrome.tabs.remove(tabId).catch(() => {});
     btnReloadGroups.disabled    = false;
     btnReloadGroups.textContent = 'Load my groups';
   }
@@ -328,12 +345,28 @@ function renderGroupsList() {
 
   if (!allDiscoveredGroups.length) {
     groupsList.innerHTML = '<div class="empty-state">No groups loaded yet.</div>';
+    groupsSearch.style.display = 'none';
     return;
   }
 
+  // Show search bar once groups are loaded
+  groupsSearch.style.display = 'block';
+
+  // Apply search filter — allDiscoveredGroups is never mutated so selections survive
+  const visible = groupSearchQuery
+    ? allDiscoveredGroups.filter((g) => g.name.toLowerCase().includes(groupSearchQuery))
+    : allDiscoveredGroups;
+
   const atMax = selectedGroupUrls.size >= MAX_GROUPS;
 
-  groupsList.innerHTML = allDiscoveredGroups.map((g, i) => {
+  if (!visible.length) {
+    groupsList.innerHTML = '<div class="empty-state">No groups match your search.</div>';
+    return;
+  }
+
+  // Use the original index into allDiscoveredGroups so checkbox handler resolves correctly
+  groupsList.innerHTML = visible.map((g) => {
+    const i       = allDiscoveredGroups.indexOf(g);
     const checked = selectedGroupUrls.has(g.url);
     const dimmed  = !checked && atMax;
     return `
@@ -598,25 +631,32 @@ async function finishOnboarding() {
       );
     });
 
-    // ── 2. Save profile to backend (phone + description) ──────────────────────
-    if (phoneNumber || aiDescription) {
-      try {
-        const token = await getAuthToken();
-        if (token) {
+    // ── 2. Save profile + sync keywords/groups to backend ────────────────────
+    const token = await getAuthToken();
+    if (token) {
+      if (phoneNumber || aiDescription) {
+        try {
           const updates = {};
           if (phoneNumber)   updates.phone_number        = phoneNumber;
           if (aiDescription) updates.service_description = aiDescription;
           await callUpdateProfile(token, updates);
+        } catch (err) {
+          console.warn('[LeadSnap] Profile save failed:', err.message);
         }
-      } catch (err) {
-        console.warn('[LeadSnap] Profile save failed:', err.message);
+      }
+
+      if (keywords.length) {
+        try { await syncKeywordsToBackend(token, keywords); } catch { /* non-fatal */ }
+      }
+      if (selectedGroups.length) {
+        try { await syncGroupsToBackend(token, selectedGroups); } catch { /* non-fatal */ }
       }
     }
 
-    // ── 3. Trigger silent first scan ──────────────────────────────────────────
+    // ── 4. Trigger silent first scan ──────────────────────────────────────────
     try { chrome.runtime.sendMessage({ type: 'LEADSNAP_MANUAL_SCAN' }); } catch { /* ignore */ }
 
-    // ── 4. Done ───────────────────────────────────────────────────────────────
+    // ── 5. Done ───────────────────────────────────────────────────────────────
     window.close();
 
   } catch (err) {
@@ -625,6 +665,28 @@ async function finishOnboarding() {
     if (skipBtn) skipBtn.style.display = '';
     alert('Failed to save settings: ' + err.message);
   }
+}
+
+// ── Backend sync helpers ──────────────────────────────────────────────────────
+
+/**
+ * Replace all backend keywords with the provided list.
+ * Fetches existing keywords, deletes each, then POSTs the new ones.
+ */
+async function syncKeywordsToBackend(token, kwList) {
+  const existing = await apiGetKeywords(token);
+  await Promise.all(existing.map((kw) => apiDeleteKeyword(token, kw.id)));
+  await Promise.all(kwList.map((kw)   => apiAddKeyword(token, kw)));
+}
+
+/**
+ * Replace all backend groups with the provided list.
+ * Fetches existing groups, deletes each, then POSTs the new ones.
+ */
+async function syncGroupsToBackend(token, groupList) {
+  const existing = await apiGetGroups(token);
+  await Promise.all(existing.map((g) => apiDeleteGroup(token, g.id)));
+  await Promise.all(groupList.map((g) => apiAddGroup(token, g.url, g.name)));
 }
 
 // ── Step 5: Auto-suggest ideal-lead description ───────────────────────────────

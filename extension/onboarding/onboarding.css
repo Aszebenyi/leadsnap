@@ -135,6 +135,18 @@ body {
 }
 .groups-msg.error { color: #dc2626; }
 
+.groups-search {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 6px;
+  transition: border-color 0.15s;
+}
+.groups-search:focus { border-color: #f97316; }
+
 .checkbox-list {
   max-height: 240px; overflow-y: auto;
   border: 1px solid #e5e7eb; border-radius: 8px;

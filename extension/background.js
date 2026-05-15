@@ -4,7 +4,7 @@ import {
   getSelectedGroups, getKeywords, getScanningEnabled,
   getSubscriptionStatus, setSubscriptionStatus, setLastScanAt,
   getAiDescription, getWebsiteUrl, getIncludeWebsite, getAlertChannel,
-  isOnboardingComplete,
+  isOnboardingComplete, getScanMaxAgeHours,
 } from './utils/storage.js';
 import { ingestLead, heartbeat } from './utils/api.js';
 import { refreshToken, getUser, signInWithGoogle } from './utils/supabase-auth.js';
@@ -19,9 +19,6 @@ const SCAN_INTERVAL_MINUTES          = 10;
 const TOKEN_REFRESH_INTERVAL_MINUTES = 55;  // Supabase tokens expire at 60 min
 const SUBSCRIPTION_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-// Only message tabs on actual group feed pages — post pages and other FB pages
-// will be skipped by the content script anyway, so filter them early.
-const FACEBOOK_GROUP_URL_PATTERN = 'https://www.facebook.com/groups/*';
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -97,7 +94,7 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
     return;
   }
 
-  const [groups, keywords] = await Promise.all([getSelectedGroups(), getKeywords()]);
+  const [groups, keywords, maxAgeHours] = await Promise.all([getSelectedGroups(), getKeywords(), getScanMaxAgeHours()]);
   if (!groups.length) {
     console.log('[LeadSnap] No groups selected — skipping scan');
     sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
@@ -109,25 +106,32 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
     return;
   }
 
-  // ── Message group-page tabs ──────────────────────────────────────────────────
+  // ── Message already-open Facebook group tabs ─────────────────────────────────
+  // We never open new tabs. The extension works by running content scripts on
+  // Facebook pages the user already has open. The passive MutationObserver in
+  // content.js handles real-time detection as the user browses. This alarm-based
+  // scan is a supplementary pass over any group tabs already open right now.
 
-  const tabs = await chrome.tabs.query({ url: FACEBOOK_GROUP_URL_PATTERN });
-  if (!tabs.length) {
-    console.log('[LeadSnap] No Facebook group tabs open — skipping scan');
-    sendToMonitor(monitorTabId, { type: 'SCAN_NO_TABS' });
+  const openGroupTabs = await chrome.tabs.query({ url: 'https://www.facebook.com/groups/*' });
+
+  if (!openGroupTabs.length) {
+    console.log('[LeadSnap] No Facebook group tabs open — passive observer will catch leads when user visits groups');
+    sendToMonitor(monitorTabId, { type: 'SCAN_COMPLETE', found: 0 });
     return;
   }
 
   let totalFound = 0;
-  for (let i = 0; i < tabs.length; i++) {
-    const tab = tabs[i];
 
-    // Send progress update to monitor window (best-effort)
+  for (let i = 0; i < openGroupTabs.length; i++) {
+    if (manualScanCancelled) break;
+
+    const tab = openGroupTabs[i];
+
     sendToMonitor(monitorTabId, {
       type:      'SCAN_PROGRESS',
       groupName: tab.title || tab.url,
       current:   i + 1,
-      total:     tabs.length,
+      total:     openGroupTabs.length,
     });
 
     try {
@@ -136,10 +140,10 @@ async function runScanCycle({ silent = false, monitorTabId = null } = {}) {
         keywords,
         groups,
         silent,
+        maxAgeHours,
       });
       if (response?.found) totalFound += response.found;
     } catch (err) {
-      // Tab may not have content script ready (e.g. tab just opened)
       console.warn(`[LeadSnap] Could not message tab ${tab.id}:`, err.message);
     }
   }

@@ -163,7 +163,7 @@ router.post('/ingest', requireAuth, requireSubscription, async (req, res, next) 
 
 // ── GET /api/leads ────────────────────────────────────────────────────────────
 
-router.get('/', requireAuth, async (req, res, next) => {
+router.get('/', requireAuth, requireSubscription, async (req, res, next) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit  ?? '50', 10), 100);
     const offset = Math.max(parseInt(req.query.offset ?? '0',  10), 0);
@@ -185,8 +185,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       query = query.eq('status', status);
     }
     if (q) {
+      // Sanitize q to prevent filter injection — allow only safe characters
+      const safeQ = String(q).replace(/[^a-zA-Z0-9 '\-]/g, '').slice(0, 200);
       // Full-text search across post text, author, and group name
-      query = query.or(`post_text.ilike.%${q}%,author_name.ilike.%${q}%,group_name.ilike.%${q}%`);
+      query = query.or(`post_text.ilike.%${safeQ}%,author_name.ilike.%${safeQ}%,group_name.ilike.%${safeQ}%`);
     }
     if (from) query = query.gte('created_at', from);
     if (to)   query = query.lte('created_at', to);
@@ -202,7 +204,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 
 // ── GET /api/leads/stats ──────────────────────────────────────────────────────
 
-router.get('/stats', requireAuth, async (req, res, next) => {
+router.get('/stats', requireAuth, requireSubscription, async (req, res, next) => {
   try {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -211,11 +213,13 @@ router.get('/stats', requireAuth, async (req, res, next) => {
         .from('leads')
         .select('score, status')
         .eq('user_id', req.user.id)
-        .gte('created_at', weekAgo),
+        .gte('created_at', weekAgo)
+        .limit(10000),
       supabase
         .from('leads')
         .select('score, status')
-        .eq('user_id', req.user.id),
+        .eq('user_id', req.user.id)
+        .limit(10000),
     ]);
 
     const thisWeek  = weekLeads?.length ?? 0;
@@ -233,7 +237,7 @@ router.get('/stats', requireAuth, async (req, res, next) => {
 
 // ── GET /api/leads/export ─────────────────────────────────────────────────────
 
-router.get('/export', requireAuth, async (req, res, next) => {
+router.get('/export', requireAuth, requireSubscription, async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from('leads')
@@ -260,6 +264,42 @@ router.get('/export', requireAuth, async (req, res, next) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="leadsnap-leads.csv"');
     res.send(rows.join('\n'));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/leads/bulk ─────────────────────────────────────────────────────
+// Update status on multiple leads in a single query.
+// Body: { ids: string[], status: string }
+
+router.patch('/bulk', requireAuth, async (req, res, next) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' });
+    }
+    if (ids.length > 200) {
+      return res.status(400).json({ error: 'Cannot update more than 200 leads at once' });
+    }
+    if (!status) {
+      return res.status(400).json({ error: 'status is required' });
+    }
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+
+    const { data, error } = await supabase
+      .from('leads')
+      .update({ status })
+      .in('id', ids)
+      .eq('user_id', req.user.id)   // enforce ownership — users can only update their own leads
+      .select('id, status');
+
+    if (error) throw error;
+
+    res.json({ updated: data.length, leads: data });
   } catch (err) {
     next(err);
   }

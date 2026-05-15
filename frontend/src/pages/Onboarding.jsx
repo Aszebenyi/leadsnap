@@ -250,7 +250,9 @@ export default function Onboarding() {
                 The extension monitors your Facebook groups in the background. Install it and sign in with the same account to start receiving leads.
               </p>
               <a
-                href="#"
+                href={import.meta.env.VITE_CWS_URL || '#'}
+                target="_blank"
+                rel="noreferrer"
                 className="block w-full bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
               >
                 Install LeadSnap for Chrome

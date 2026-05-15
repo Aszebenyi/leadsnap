@@ -16,6 +16,7 @@ const SYNC_KEYS = {
   WEBSITE_URL:          'website_url',
   INCLUDE_WEBSITE:      'include_website_in_replies',
   ALERT_CHANNEL:        'alert_channel',
+  SCAN_MAX_AGE_HOURS:   'scan_max_age_hours', // 24 | 168 | 720
 };
 
 const LOCAL_KEYS = {
@@ -84,6 +85,10 @@ export const setIncludeWebsite   = (v) => chrome.storage.sync.set({ [SYNC_KEYS.I
 
 export const getAlertChannel     = () => syncGet(SYNC_KEYS.ALERT_CHANNEL, 'sms'); // 'sms' | 'whatsapp'
 export const setAlertChannel     = (v) => chrome.storage.sync.set({ [SYNC_KEYS.ALERT_CHANNEL]: v });
+
+// How far back to scan: 24 (last 24 h), 168 (7 days), or 720 (30 days). Default 24 h.
+export const getScanMaxAgeHours  = () => syncGet(SYNC_KEYS.SCAN_MAX_AGE_HOURS, 24);
+export const setScanMaxAgeHours  = (v) => chrome.storage.sync.set({ [SYNC_KEYS.SCAN_MAX_AGE_HOURS]: v });
 
 // ── Local storage (larger, device-only) ──────────────────────────────────────
 

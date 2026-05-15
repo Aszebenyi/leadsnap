@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import LeadCard from '../components/LeadCard';
 import { useLeads } from '../hooks/useLeads';
-import { getProfile, getLeads, getLeadStats, updateLeadStatus as apiUpdateLeadStatus } from '../lib/api';
+import { getProfile, getLeads, getLeadStats, updateLeadStatus as apiUpdateLeadStatus, bulkUpdateLeadStatus } from '../lib/api';
 
 const STATUS_TABS = [
   { label: 'All',     value: undefined  },
@@ -133,12 +133,13 @@ export default function Dashboard() {
     if (!leads.length || statusFilter !== 'new') return;
     setMarkingAllSeen(true);
     try {
-      await Promise.all(leads.map((l) => apiUpdateLeadStatus(l.id, 'seen')));
+      await bulkUpdateLeadStatus(leads.map((l) => l.id), 'seen');
       setNewCount(0);
-      // Reload the current filter
-      setStatusFilter((f) => f); // triggers useLeads re-fetch via filtersKey change — noop trick
-      window.location.reload(); // simplest: just reload to get fresh state
+      // Switch to "All" tab — changes filtersKey, triggering useLeads to refetch
+      setStatusFilter(undefined);
     } catch {
+      // leave state as-is so the user can retry
+    } finally {
       setMarkingAllSeen(false);
     }
   }

@@ -10,6 +10,8 @@ import {
   isOnboardingComplete,
   getRefreshToken,
   setSession,
+  getScanMaxAgeHours,
+  setScanMaxAgeHours,
 } from '../utils/storage.js';
 import { signIn, signUp } from '../utils/supabase-auth.js';
 
@@ -244,8 +246,10 @@ function relativeTime(iso) {
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
+const SCAN_AGE_LABELS = { 24: 'Last 24 hours', 168: 'Last 7 days', 720: 'Last 30 days' };
+
 async function loadSettings() {
-  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite, alertChannel] =
+  const [savedGroups, cachedKeywords, phoneNumber, websiteUrl, includeWebsite, alertChannel, scanMaxAgeHours] =
     await Promise.all([
       new Promise((r) => chrome.storage.sync.get('selected_groups', (d) => r(d.selected_groups || []))),
       new Promise((r) => chrome.storage.sync.get('keywords',        (d) => r(d.keywords        || []))),
@@ -253,6 +257,7 @@ async function loadSettings() {
       new Promise((r) => chrome.storage.sync.get('website_url',     (d) => r(d.website_url     || ''))),
       new Promise((r) => chrome.storage.sync.get('include_website_in_replies', (d) => r(!!d.include_website_in_replies))),
       new Promise((r) => chrome.storage.sync.get('alert_channel',  (d) => r(d.alert_channel   || 'sms'))),
+      getScanMaxAgeHours(),
     ]);
 
   document.getElementById('setting-keywords-val').textContent =
@@ -272,10 +277,29 @@ async function loadSettings() {
   // Alert channel pills
   const channelVal = document.getElementById('setting-channel-val');
   channelVal.textContent = alertChannel === 'whatsapp' ? 'WhatsApp' : 'SMS';
-  document.querySelectorAll('.channel-pill').forEach((pill) => {
+  document.querySelectorAll('.channel-pill[data-channel]').forEach((pill) => {
     pill.classList.toggle('active', pill.dataset.channel === alertChannel);
   });
+
+  // Scan window pills
+  const ageVal = document.getElementById('setting-scan-age-val');
+  ageVal.textContent = SCAN_AGE_LABELS[scanMaxAgeHours] ?? 'Last 24 hours';
+  document.querySelectorAll('.channel-pill[data-age]').forEach((pill) => {
+    pill.classList.toggle('active', Number(pill.dataset.age) === scanMaxAgeHours);
+  });
 }
+
+// Scan window pill clicks
+document.getElementById('scan-age-toggle-row').addEventListener('click', async (e) => {
+  const pill = e.target.closest('.channel-pill[data-age]');
+  if (!pill) return;
+  const hours = Number(pill.dataset.age);
+  await setScanMaxAgeHours(hours);
+  document.getElementById('setting-scan-age-val').textContent = SCAN_AGE_LABELS[hours];
+  document.querySelectorAll('.channel-pill[data-age]').forEach((p) => {
+    p.classList.toggle('active', p === pill);
+  });
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

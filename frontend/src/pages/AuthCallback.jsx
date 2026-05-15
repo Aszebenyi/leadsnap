@@ -16,11 +16,13 @@ export default function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const params      = new URLSearchParams(window.location.hash.slice(1));
-    const accessToken = params.get('access_token');
+    const params       = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken  = params.get('access_token');
     const refreshToken = params.get('refresh_token');
+    const tokenType    = params.get('token_type');
 
-    if (!accessToken || !refreshToken) {
+    // Require all three fields; token_type must be 'bearer' (Supabase standard)
+    if (!accessToken || !refreshToken || tokenType !== 'bearer') {
       navigate('/login', { replace: true });
       return;
     }

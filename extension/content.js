@@ -10,6 +10,14 @@ console.log('[LeadSnap] Content script loaded on', window.location.href);
 // Filters out UI labels, reaction counts, and short button text.
 const MIN_POST_TEXT_LENGTH = 20;
 
+// Only process posts from the last N hours. Posts older than this are ignored.
+// This prevents the first scan from picking up months-old posts on quiet groups.
+const MAX_POST_AGE_HOURS = 24;
+
+// Maximum number of posts to evaluate per scan. Facebook feeds show newest first,
+// so this also acts as a recency cap.
+const MAX_POSTS_PER_SCAN = 20;
+
 // ── Message listener ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -19,94 +27,84 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return; // synchronous
   }
 
-  // ── Discover groups by expanding the left-sidebar group list ─────────────
-  // facebook.com/groups/ has a left sidebar with "Groups you manage" and
-  // "Groups you've joined". We click every "See more" / "See all" button in
-  // the nav area to expand both lists, then extract links from there only
-  // (ignoring the main feed which contains notifications, not group entries).
-  // Incremental scrape during each scroll step so virtualised rows that get
-  // unmounted mid-scroll are still captured (Facebook removes DOM nodes that
-  // scroll out of the viewport when the list is long).
-  // Groups are stored in a Map keyed by URL so duplicates are ignored.
+  // ── Discover ALL joined groups by scrolling facebook.com/groups/joins ───────
+  // Diagnostic confirmed: /groups/joins is the correct page. The scroll
+  // container is <html> (overflow: auto scroll) — confirmed via:
+  //   document.body.scrollHeight: 21469 vs innerHeight: 941
+  //   html overflow: auto scroll
+  //   [role=main] clientHeight === scrollHeight (fully expanded, can't scroll)
+  // document.documentElement.scrollTop is the only target that moves the page.
   if (message.type === 'LEADSNAP_SCROLL_EXTRACT_GROUPS') {
     (async () => {
-      const groupMap = new Map(); // url → group object
+      const groupMap = new Map(); // url → { url, name }
 
+      // Scrape all valid group links in the full document and merge into groupMap.
+      // Called before each scroll step so nodes removed by virtualisation are
+      // captured while they were still visible.
       function mergeVisible() {
-        let added = 0;
-        for (const g of extractGroupsFromDOM()) {
-          if (!groupMap.has(g.url)) { groupMap.set(g.url, g); added++; }
-        }
-        return added;
+        document.querySelectorAll('a[href*="/groups/"]').forEach((link) => {
+          let parsed;
+          try { parsed = new URL(link.href); } catch { return; }
+          if (!parsed.hostname.includes('facebook.com')) return;
+
+          const path = parsed.pathname.replace(/\/$/, '');
+          if (!/^\/groups\/[^/]+$/.test(path)) return;
+          if (EXCLUDED_PATHS.test(path)) return;
+
+          const url = 'https://www.facebook.com' + path;
+          if (groupMap.has(url)) return;
+
+          const name = bestGroupName(link, path);
+          if (!name) return;
+
+          groupMap.set(url, { url, name });
+        });
       }
 
-      // ── 1. Page loaded ────────────────────────────────────────────────────
-      console.log('[LeadSnap] Current URL:', window.location.href);
-
-      // Facebook lays out the groups grid inside [role="main"] which has its
-      // own overflow:auto scroll container. The outer document.body has a fixed
-      // height equal to the viewport, so window.scrollBy does nothing and
-      // document.body.scrollHeight never changes. We must scroll the inner
-      // container directly so Facebook's IntersectionObserver fires and
-      // lazy-loads more groups.
-      const root      = document.querySelector('[role="main"]') || document.scrollingElement || document.documentElement;
-      const scrollEl  = (root === document) ? document.documentElement : root;
-
-      // ── 2. Initial link count ─────────────────────────────────────────────
-      const initialLinks = root.querySelectorAll('a[href*="/groups/"]');
-      console.log('[LeadSnap] Initial /groups/ links found:', initialLinks.length);
+      console.log('[LeadSnap] SCROLL_EXTRACT_GROUPS — URL:', window.location.href);
+      console.log('[LeadSnap] Initial links:', document.querySelectorAll('a[href*="/groups/"]').length);
 
       mergeVisible();
-      console.log(`[LeadSnap] Scroll 0: found ${groupMap.size} unique groups`);
+      console.log(`[LeadSnap] Scroll 0: ${groupMap.size} groups`);
 
-      const MAX_PASSES      = 120;
-      const SCROLL_DELAY_MS = 1200; // give FB time to lazy-load each batch
-      const STOP_AFTER_SAME = 6;    // stop after 6 passes with no new groups
+      const MAX_PASSES      = 100;
+      const SCROLL_DELAY_MS = 2000;
+      const STOP_AFTER_SAME = 6; // passes with no new height AND no new groups
 
-      let sameCountRuns = 0;
-      let lastLinkCount = root.querySelectorAll('a[href*="/groups/"]').length;
+      let sameRuns   = 0;
+      let lastHeight = document.documentElement.scrollHeight;
 
       for (let i = 0; i < MAX_PASSES; i++) {
-        // Scroll the actual container (not window) so FB's IntersectionObserver fires
-        scrollEl.scrollTop += scrollEl.clientHeight || window.innerHeight;
+        const prevSize = groupMap.size;
+
+        document.documentElement.scrollTop = document.documentElement.scrollHeight;
 
         await new Promise((r) => setTimeout(r, SCROLL_DELAY_MS));
 
         mergeVisible();
 
-        // ── 3. Per-scroll log ───────────────────────────────────────────────
-        console.log(`[LeadSnap] Scroll ${i + 1}: found ${groupMap.size} unique groups`);
+        const newHeight  = document.documentElement.scrollHeight;
+        const newGroups  = groupMap.size - prevSize;
+        const heightGrew = newHeight > lastHeight;
+        lastHeight = newHeight;
 
-        // Detect new content by counting raw links, not scrollHeight
-        // (body scrollHeight stays constant when content is in an inner container)
-        const newLinkCount = root.querySelectorAll('a[href*="/groups/"]').length;
-        if (newLinkCount === lastLinkCount) {
-          sameCountRuns++;
-          if (sameCountRuns >= STOP_AFTER_SAME) break;
+        console.log(
+          `[LeadSnap] Scroll ${i + 1}: height=${newHeight} (${heightGrew ? '+grew' : 'same'}) | +${newGroups} new → ${groupMap.size} total`
+        );
+
+        if (!heightGrew && newGroups === 0) {
+          if (++sameRuns >= STOP_AFTER_SAME) {
+            console.log(`[LeadSnap] No new content for ${STOP_AFTER_SAME} passes — done.`);
+            break;
+          }
         } else {
-          sameCountRuns = 0;
-          lastLinkCount = newLinkCount;
+          sameRuns = 0;
         }
       }
 
       const results = [...groupMap.values()];
-
-      // ── 4. Final count ────────────────────────────────────────────────────
       console.log('[LeadSnap] Final unique groups found:', results.length);
-
-      // ── 5. First 10 results ───────────────────────────────────────────────
-      console.log('[LeadSnap] First 10 groups:');
-      results.slice(0, 10).forEach((g) => {
-        console.log(`  ${g.name} — ${g.url}`);
-      });
-
-      // ── 6. DOM dump if count is suspiciously low ──────────────────────────
-      if (results.length < 10) {
-        console.warn('[LeadSnap] Under 10 groups — raw DOM dump:');
-        [...root.querySelectorAll('a[href*="/groups/"]')].slice(0, 20).forEach((a, i) => {
-          console.log(`  [${i}] href="${a.href}" | text="${a.innerText.trim().slice(0, 80)}" | aria-label="${a.getAttribute('aria-label') || ''}"`);
-        });
-      }
+      results.slice(0, 10).forEach((g) => console.log(`  ${g.name} — ${g.url}`));
 
       sendResponse({ groups: results });
     })();
@@ -115,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type !== 'LEADSNAP_SCAN') return;
 
-  const { keywords, groups, silent = false } = message;
+  const { keywords, groups, silent = false, maxAgeHours = MAX_POST_AGE_HOURS } = message;
 
   // Only scan if we're on a Facebook group page
   if (!isFacebookGroupPage()) {
@@ -129,7 +127,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
-  scrapeAndSubmit(keywords, groups, silent)
+  scrollThenScrape(keywords, groups, silent, maxAgeHours)
     .then((found) => sendResponse({ status: 'ok', found }))
     .catch((err) => {
       console.error('[LeadSnap] Scrape error:', err);
@@ -138,6 +136,80 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return true; // keep message channel open for async response
 });
+
+// ── Passive observer — runs without any tab-opening ──────────────────────────
+// When the user is already browsing a Facebook group page, we watch for new
+// posts appearing in the DOM and submit matches immediately. This catches leads
+// in real time without the background scan needing to open any tabs.
+
+(function initPassiveObserver() {
+  if (!isFacebookGroupPage()) return;
+
+  let passiveKeywords = [];
+  let passiveGroups   = [];
+  let passiveMaxAge   = MAX_POST_AGE_HOURS;
+  let debounceTimer   = null;
+
+  // Load config from storage once; re-read on storage change
+  function loadConfig() {
+    chrome.storage.sync.get(['keywords', 'selected_groups', 'scan_max_age_hours'], (d) => {
+      passiveKeywords = d.keywords        || [];
+      passiveGroups   = d.selected_groups || [];
+      passiveMaxAge   = d.scan_max_age_hours ?? MAX_POST_AGE_HOURS;
+    });
+  }
+  loadConfig();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && (changes.keywords || changes.selected_groups || changes.scan_max_age_hours)) {
+      loadConfig();
+    }
+  });
+
+  // Debounced scan — runs 2 s after DOM settles to let React finish rendering
+  function schedulePassiveScan() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      if (!passiveKeywords.length) {
+        console.log('[LeadSnap] Passive scan skipped — no keywords configured');
+        return;
+      }
+      if (!passiveGroups.length) {
+        console.log('[LeadSnap] Passive scan skipped — no groups selected');
+        return;
+      }
+      if (!isFacebookGroupPage()) return;
+      if (!isMonitoredGroup(passiveGroups)) {
+        console.log('[LeadSnap] Passive scan skipped — this group is not in your monitored list:', window.location.href);
+        return;
+      }
+      console.log('[LeadSnap] Passive scan running on', window.location.href);
+      try {
+        const found = await scrapeAndSubmit(passiveKeywords, passiveGroups, false, passiveMaxAge);
+        console.log(`[LeadSnap] Passive scan complete — ${found} new lead(s) submitted`);
+      } catch (err) {
+        console.warn('[LeadSnap] Passive scan error:', err.message);
+      }
+    }, 2000);
+  }
+
+  // Watch for new articles being added (Facebook's infinite scroll / live updates)
+  const observer = new MutationObserver((mutations) => {
+    const hasNewArticle = mutations.some((m) =>
+      [...m.addedNodes].some((n) =>
+        n.nodeType === 1 && (
+          n.getAttribute?.('role') === 'article' ||
+          n.querySelector?.('[role="article"]')
+        )
+      )
+    );
+    if (hasNewArticle) schedulePassiveScan();
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Also run once on page load in case posts are already in the DOM
+  schedulePassiveScan();
+})();
 
 // ── Page detection ────────────────────────────────────────────────────────────
 
@@ -157,11 +229,15 @@ function normalizeGroupUrl(url) {
 /** Find the group object matching the current page URL, or null if not monitored. */
 function findCurrentGroup(groups) {
   if (!groups || !groups.length) return null;
-  const current = normalizeGroupUrl(window.location.href);
+  const currentPath = normalizeGroupUrl(window.location.href); // e.g. /groups/medellinexpats
+  const currentSlug = currentPath.split('/').pop();             // e.g. medellinexpats
+
   return groups.find((g) => {
-    // Support both { url } (new format) and { facebook_group_url } (legacy)
-    const url = typeof g === 'string' ? g : (g.url || g.facebook_group_url);
-    return normalizeGroupUrl(url) === current;
+    const url  = typeof g === 'string' ? g : (g.url || g.facebook_group_url);
+    const path = normalizeGroupUrl(url);
+    const slug = path.split('/').pop();
+    // Exact path match OR same slug (handles numeric-ID ↔ vanity-name mismatch)
+    return path === currentPath || slug === currentSlug;
   }) ?? null;
 }
 
@@ -186,15 +262,13 @@ const EXCLUDED_PATHS = /^\/groups\/(feed|discover|create|category|search|notific
 // Matches time-relative strings Facebook uses for "last visited" labels
 const LAST_VISITED_RE = /\d+\s*(minute|hour|day|week|month|year)s?\s*ago|yesterday|today|just now/i;
 
-function extractGroupsFromDOM() {
+// rootEl — optional DOM element to search within. Defaults to [role="main"]
+// (for backwards-compat with LEADSNAP_GET_GROUPS) or document as last fallback.
+function extractGroupsFromDOM(rootEl) {
   const seen = new Set();
   const groups = [];
 
-  // On /groups/joins/ the group grid is inside [role="main"]. Searching only
-  // there avoids the left-sidebar notification links which also contain
-  // /groups/<id> URLs but whose text is "X mentioned you in…" noise.
-  // Fall back to document if [role="main"] isn't present (other FB pages).
-  const root = document.querySelector('[role="main"]') || document;
+  const root = rootEl || document.querySelector('[role="main"]') || document;
 
   root.querySelectorAll('a[href*="/groups/"]').forEach((link) => {
     let parsed;
@@ -278,6 +352,20 @@ const FB_UI_RE = /^(view group|see more|see all|show more|create( a)? (new )?gro
 // Notification-text patterns — long strings from activity sidebar
 const FB_NOTIF_RE = /mentioned you|commented on|replied to|reacted to|posted in|wrote on|invited you|new post|new member/i;
 
+/**
+ * Strip Facebook's notification suffix from a group name candidate.
+ * When a group has unread posts, Facebook renders the sidebar link's
+ * aria-label as: 'Group Name: "Post preview text"6h'
+ * We want only the part before the ': "'.
+ */
+function cleanGroupName(raw) {
+  if (!raw) return raw;
+  // Notification format always has ': "' (colon + space + opening quote)
+  const notifIdx = raw.indexOf(': "');
+  if (notifIdx > 0) return raw.slice(0, notifIdx).trim();
+  return raw;
+}
+
 /** Extract the best available name for a group link element.
  *
  * We deliberately do NOT walk up to ancestor elements to find a name, because
@@ -294,11 +382,11 @@ const FB_NOTIF_RE = /mentioned you|commented on|replied to|reacted to|posted in|
  */
 function bestGroupName(link, path) {
   // 1. aria-label on the link itself
-  let name = link.getAttribute('aria-label')?.trim().split('\n')[0].trim();
+  let name = cleanGroupName(link.getAttribute('aria-label')?.trim().split('\n')[0].trim());
   if (isValidGroupName(name)) return name;
 
   // 2. Inner text of the link (empty for cover-photo / icon links)
-  name = link.innerText?.trim().split('\n')[0].trim();
+  name = cleanGroupName(link.innerText?.trim().split('\n')[0].trim());
   if (isValidGroupName(name)) return name;
 
   // 3. No ancestor walk — return null so cover-photo links are skipped and
@@ -310,6 +398,7 @@ function isValidGroupName(name) {
   if (!name || name.length < 2 || name.length > 80) return false;
   if (FB_UI_RE.test(name))    return false;
   if (FB_NOTIF_RE.test(name)) return false;
+  if (/: "/.test(name))       return false; // notification text leaked in
   return true;
 }
 
@@ -336,22 +425,113 @@ function extractLastVisited(link) {
   return null;
 }
 
+// ── Post age detection ────────────────────────────────────────────────────────
+
+/**
+ * Returns the estimated age of a post in hours, or null if it can't be determined.
+ * Facebook shows timestamps like "2 h", "Just now", "Yesterday", "Monday", etc.
+ * We scan all text nodes inside the article for these patterns.
+ */
+function estimatePostAgeHours(article) {
+  // Facebook timestamp links are <a> tags that:
+  //  - link to the post permalink (/posts/, /permalink/, story_fbid=)
+  //  - contain ONLY a short time string ("2 h", "Just now", "Monday", etc.)
+  // We ONLY look at these links to avoid matching day/month names inside post body text.
+  const timestampLinks = [...article.querySelectorAll('a[href]')].filter((a) => {
+    const href = a.href || '';
+    return (
+      href.includes('/posts/') ||
+      href.includes('/permalink/') ||
+      href.includes('story_fbid=') ||
+      href.includes('?v=')
+    ) && (a.innerText?.trim().length ?? 0) < 30;
+  });
+
+  for (const a of timestampLinks) {
+    const text = a.innerText?.trim().toLowerCase() ?? '';
+    if (!text) continue;
+
+    if (/just now|moments? ago/.test(text)) return 0;
+
+    const mins = text.match(/^(\d+)\s*min/);
+    if (mins) return parseInt(mins[1], 10) / 60;
+
+    const hrs = text.match(/^(\d+)\s*h/);
+    if (hrs) return parseInt(hrs[1], 10);
+
+    if (text.startsWith('yesterday')) return 30;
+
+    if (/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/.test(text)) return 7 * 24;
+
+    if (/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/.test(text)) return 30 * 24;
+  }
+
+  return null; // unknown age — include the post to be safe
+}
+
 // ── Main scrape + submit flow ─────────────────────────────────────────────────
 
-async function scrapeAndSubmit(keywords, groups, silent = false) {
-  const seenIds = await getSeenPostIds();
-  const posts = scrapePosts();
+/**
+ * Scroll the page to trigger Facebook's IntersectionObserver (which lazy-loads
+ * feed posts), then scrape. Without this, the feed DOM is empty because posts
+ * only render when they enter the viewport.
+ */
+async function scrollThenScrape(keywords, groups, silent = false, maxAgeHours = MAX_POST_AGE_HOURS) {
+  const scrollEl = document.documentElement;
 
-  console.log(`[LeadSnap] Found ${posts.length} posts on page`);
+  // Scroll down in steps to trigger post loading
+  scrollEl.scrollTop = 600;
+  await new Promise((r) => setTimeout(r, 1500));
+  scrollEl.scrollTop = 1200;
+  await new Promise((r) => setTimeout(r, 1500));
+  scrollEl.scrollTop = 0; // scroll back to top so we scrape from the beginning
+  await new Promise((r) => setTimeout(r, 500));
+
+  const posts = scrapePosts();
+  console.log(`[LeadSnap] After scroll: ${posts.length} article(s) found`);
+
+  // If nothing loaded yet, wait a bit longer and try once more
+  if (!posts.length) {
+    scrollEl.scrollTop = 400;
+    await new Promise((r) => setTimeout(r, 3000));
+    scrollEl.scrollTop = 0;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  return scrapeAndSubmit(keywords, groups, silent, maxAgeHours);
+}
+
+async function scrapeAndSubmit(keywords, groups, silent = false, maxAgeHours = MAX_POST_AGE_HOURS) {
+  const seenIds = await getSeenPostIds();
+
+  // Cap to the N most recent posts (Facebook shows newest first).
+  // Age filtering is done per-article using the timestamp link found in each one.
+  const allPosts = scrapePosts();
+  console.log(`[LeadSnap] scrapeAndSubmit — ${allPosts.length} article(s) on page, keywords: [${keywords.join(', ')}]`);
+
+  const posts = allPosts.slice(0, MAX_POSTS_PER_SCAN).filter((post) => {
+    if (post.ageHours !== null && post.ageHours > maxAgeHours) {
+      console.log(`[LeadSnap] Skipping post — ${post.ageHours.toFixed(0)}h old (limit ${maxAgeHours}h): "${post.text.slice(0, 40)}"`);
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`[LeadSnap] ${posts.length} post(s) within ${maxAgeHours}h window`);
 
   let submitted = 0;
 
   for (const post of posts) {
-    // Skip already-processed posts
-    if (seenIds.includes(post.id)) continue;
+    if (seenIds.includes(post.id)) {
+      console.log(`[LeadSnap] Skipping already-seen post: "${post.text.slice(0, 50)}"`);
+      continue;
+    }
 
     const matched = matchKeywords(post.text, keywords);
-    if (!matched.length) continue;
+    if (!matched.length) {
+      console.log(`[LeadSnap] No keyword match: "${post.text.slice(0, 60)}"`);
+      continue;
+    }
 
     const groupName = getGroupName(groups);
     const groupUrl  = window.location.href.split('?')[0];
@@ -416,8 +596,6 @@ function scrapePosts() {
 
 function extractPost(article) {
   // ── Post text ────────────────────────────────────────────────────────────────
-  // Facebook nests post text in a div with data-ad-preview="message" or
-  // inside a div[dir="auto"] inside the article. We try multiple strategies.
   const text = extractText(article);
   if (!text) return null;
 
@@ -427,11 +605,14 @@ function extractPost(article) {
   // ── Post URL ─────────────────────────────────────────────────────────────────
   const url = extractPostUrl(article);
 
+  // ── Post age ──────────────────────────────────────────────────────────────────
+  // Attached here so the filter in scrapeAndSubmit uses the correct article's age.
+  const ageHours = estimatePostAgeHours(article);
+
   // ── Stable ID ────────────────────────────────────────────────────────────────
-  // Prefer URL-based ID (most stable). Fall back to a content hash.
   const id = url ? urlToId(url) : contentHash(author + text.slice(0, 120));
 
-  return { id, text, author, url };
+  return { id, text, author, url, ageHours };
 }
 
 function extractText(article) {

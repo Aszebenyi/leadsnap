@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import './Landing.css';
 
-// Update this once the extension is published to the Chrome Web Store
-const CWS_URL = 'https://chrome.google.com/webstore/detail/leadsnap';
+// Chrome Web Store URL — set VITE_CWS_URL in your .env once the extension is published
+const CWS_URL = import.meta.env.VITE_CWS_URL || '#';
 
 const BoltIcon = ({ size = 15 }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: size, height: size }}>

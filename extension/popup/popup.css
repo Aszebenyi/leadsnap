@@ -350,6 +350,16 @@ body {
 .leads-empty-icon { font-size: 28px; margin-bottom: 8px; }
 
 /* ── Settings tab ── */
+.settings-section-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  padding: 12px 0 4px;
+}
+.settings-section-header:first-child { padding-top: 4px; }
+
 .settings-list {
   border: 1px solid var(--rule); border-radius: 10px; overflow: hidden;
 }

@@ -148,6 +148,7 @@
     <!-- ══ Settings tab ══ -->
     <div id="tab-settings" class="tab-panel hidden">
 
+      <div class="settings-section-header">Monitoring</div>
       <div class="settings-list">
 
         <div class="setting-row">
@@ -169,6 +170,20 @@
         </div>
 
         <div class="setting-row">
+          <div class="setting-icon">⚙️</div>
+          <div class="setting-body">
+            <div class="setting-label">Setup wizard</div>
+            <div class="setting-val">Re-configure groups, keywords &amp; alerts</div>
+          </div>
+          <button class="setting-action" id="btn-rerun-setup">Open →</button>
+        </div>
+
+      </div>
+
+      <div class="settings-section-header">Alerts</div>
+      <div class="settings-list">
+
+        <div class="setting-row">
           <div class="setting-icon">📱</div>
           <div class="setting-body">
             <div class="setting-label">Alerts</div>
@@ -176,6 +191,7 @@
           </div>
           <button class="setting-action" id="btn-edit-phone">Edit →</button>
         </div>
+
         <div class="setting-row">
           <div class="setting-icon">💬</div>
           <div class="setting-body">
@@ -198,12 +214,16 @@
         </div>
 
         <div class="setting-row">
-          <div class="setting-icon">⚙️</div>
+          <div class="setting-icon">🕐</div>
           <div class="setting-body">
-            <div class="setting-label">Setup wizard</div>
-            <div class="setting-val">Re-configure groups, keywords &amp; alerts</div>
+            <div class="setting-label">Scan window</div>
+            <div class="setting-val" id="setting-scan-age-val">Last 24 hours</div>
           </div>
-          <button class="setting-action" id="btn-rerun-setup">Open →</button>
+          <div class="channel-toggle-row" id="scan-age-toggle-row">
+            <button class="channel-pill active" data-age="24">24h</button>
+            <button class="channel-pill" data-age="168">7 days</button>
+            <button class="channel-pill" data-age="720">30 days</button>
+          </div>
         </div>
 
       </div>

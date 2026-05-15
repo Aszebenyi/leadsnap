@@ -46,6 +46,13 @@ export function updateLeadStatus(id, status) {
   });
 }
 
+export function bulkUpdateLeadStatus(ids, status) {
+  return request('/api/leads/bulk', {
+    method: 'PATCH',
+    body: JSON.stringify({ ids, status }),
+  });
+}
+
 // ── Keywords ──────────────────────────────────────────────────────────────────
 
 export function getKeywords() {
